@@ -60,7 +60,10 @@
         <div id="fiq-hright">
           <div id="fiq-clock"></div>
           <div id="fiq-date"></div>
-          <div id="fiq-user"></div>
+          <div id="fiq-user" style="display:flex;align-items:center;gap:5px;justify-content:flex-end">
+            <span id="fiq-username"></span>
+            <span id="fiq-adminbadge" style="display:none;font-size:7px;font-weight:bold;letter-spacing:.08em;background:#CC0000;color:#fff;border-radius:2px;padding:1px 5px">ADMIN</span>
+          </div>
         </div>
       </div>
       <div id="fiq-kpirow">
@@ -81,8 +84,8 @@
 
     <!-- FILTER BAR -->
     <div id="fiq-filter">
-      <label class="fiq-filterlbl">GROUP FILTER</label>
-      <select id="fiq-grpsel"></select>
+      <span class="fiq-grpfilter"><label class="fiq-filterlbl">GROUP FILTER</label></span>
+      <span class="fiq-grpfilter"><select id="fiq-grpsel"></select></span>
       <label class="fiq-filterlbl" style="margin-left:10px">SHIFT START</label>
       <select id="fiq-shiftsel">
         <option value="rolling12">Rolling 12 Hours</option>
@@ -312,7 +315,7 @@ function fl() {
 injectVisualCSS();
 
 let gApi = null, gState = null, refreshTimer = null, layoutTimer = null;
-let fleet = [], selGroup = "", userGids = [];
+let fleet = [], selGroup = "", userGids = [], isAdmin = false;
 
 // Geotab Diagnostic IDs
 const DIAG = {
@@ -462,22 +465,48 @@ async function loadGroups() {
     if (gState?.credentials?.userName) {
       const u = await gapi("Get", { typeName:"User", search:{ name: gState.credentials.userName } });
       cu = u?.[0];
-      if (cu?.name) T("fiq-user", cu.name);
+      if (cu?.name) {
+        T("fiq-username", cu.name);
+      }
     }
   } catch(_) {}
 
-  const all = await gapi("Get", { typeName:"Group", resultsLimit:1000 });
-  let vis = (all || []).filter(g => g.id && !SYS.has(g.id));
+  // ── Admin check via Geotab security clearance ──
+  // GroupSystemSecurityId = built-in Administrator clearance in MyGeotab.
+  // We check the user's securityGroups array for this ID.
+  // Non-admins never see the group filter — their companyGroups are applied silently.
+  isAdmin = !!(cu?.securityGroups?.some(g =>
+    g.id === "GroupSystemSecurityId" || g.security?.id === "GroupSystemSecurityId"
+  ));
+
+  // Show ADMIN badge in header for admins
+  const badge = $("fiq-adminbadge");
+  if (badge) badge.style.display = isAdmin ? "inline-block" : "none";
+
+  // Show/hide group filter — admins only
+  const grpLabel = document.querySelector('label[for="fiq-grpsel"], .fiq-filterlbl');
+  const grpWrap  = $("fiq-grpsel");
+  // Hide both the label and select for non-admins
+  document.querySelectorAll(".fiq-grpfilter").forEach(el => {
+    el.style.display = isAdmin ? "" : "none";
+  });
 
   if (cu?.companyGroups?.length) {
     const ms = new Set(cu.companyGroups.map(g => g.id));
     userGids = [...ms];
-    const mine = vis.filter(g => ms.has(g.id));
-    if (mine.length) vis = mine;
+    if (!isAdmin) {
+      // Non-admin: silently lock to their assigned groups — no UI element shown
+      selGroup = "";  // use userGids array filter in refreshData
+      return;
+    }
   }
 
+  // Admin path: populate the group dropdown
+  const all = await gapi("Get", { typeName:"Group", resultsLimit:1000 });
+  let vis = (all || []).filter(g => g.id && !SYS.has(g.id));
+
   const sel = $("fiq-grpsel");
-  sel.innerHTML = '<option value="">— All My Vehicles —</option>';
+  sel.innerHTML = '<option value="">— All Groups —</option>';
   [...vis].sort((a,b) => (a.name||"").localeCompare(b.name||""))
     .forEach(g => {
       const o = document.createElement("option");
