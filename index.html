@@ -21,33 +21,55 @@
   <title>SpotterIQ — Yard Command</title>
   <style>
     /* ═══════════════════════════════════════════════════════
-       DESIGN TOKENS — Industrial Command Center
-       Phosphor-green on near-black, amber accents
+       DESIGN TOKENS — SpotterIQ Light Theme
+       Matches fleetsource.com/cdn/shop/t/3/assets/yard-command.html
+       Light gray body · White cards · Dark header · Red accent
     ═══════════════════════════════════════════════════════ */
     :root {
-      --bg:          #0a0c0f;
-      --bg2:         #111418;
-      --bg3:         #181c22;
-      --border:      #1e2530;
-      --border-hl:   #2a3545;
+      /* Surfaces */
+      --bg:          #F0F2F5;   /* page body */
+      --bg2:         #ffffff;   /* cards, panels, tabs, filter bar */
+      --bg3:         #F5F5F5;   /* hover rows, nested cells */
+      --bg-header:   #1F1F1F;   /* top header bar (stays dark) */
+      --bg-kpi:      #2A2A2A;   /* KPI chips inside dark header */
+      --border:      #CCCCCC;
+      --border-hl:   #E0E0E0;
 
-      --green:       #00e676;
-      --green-dim:   #00b85c;
-      --green-glow:  rgba(0,230,118,.18);
-      --amber:       #ffab00;
-      --amber-dim:   #e69500;
-      --amber-glow:  rgba(255,171,0,.18);
-      --red:         #ff4444;
-      --red-glow:    rgba(255,68,68,.18);
-      --blue:        #40a9ff;
-      --blue-glow:   rgba(64,169,255,.15);
-      --muted:       #4a5568;
-      --text:        #c8d3e0;
-      --text-bright: #eef2f7;
+      /* Brand accent */
+      --red:         #CC0000;
+      --red-dim:     #AA0000;
+      --red-glow:    rgba(204,0,0,.10);
 
-      /* Monospace stack guaranteed in Windows/MyGeotab */
+      /* State colors — exact match to original */
+      --green:       #1B7A1B;   /* Trailer Move */
+      --green-dim:   #1B5E20;
+      --green-glow:  rgba(27,122,27,.10);
+      --green-bg:    #F0FAF0;
+      --green-border:#A8D5A8;
+
+      --amber:       #B87800;   /* Trailer Idle */
+      --amber-dim:   #8B5E00;
+      --amber-glow:  rgba(184,120,0,.10);
+      --amber-bg:    #FFFBF0;
+      --amber-border:#F0D080;
+
+      --purple:      #6B21A8;   /* Bobtail Move */
+      --purple-bg:   #FAF0FF;
+      --purple-border:#CCA8E8;
+
+      --blue:        #3B5BDB;   /* Moving / No IOX */
+      --blue-bg:     #F0F4FF;
+      --blue-border: #B0C4FF;
+      --blue-glow:   rgba(59,91,219,.10);
+
+      --muted:       #888888;
+      --text:        #1A1A1A;
+      --text-bright: #1A1A1A;
+      --text-on-dark:#ffffff;
+
+      /* Fonts */
       --font-mono:  'Courier New', 'Lucida Console', monospace;
-      --font-ui:    'Segoe UI', 'Tahoma', sans-serif;
+      --font-ui:    Arial, 'Segoe UI', sans-serif;
     }
 
     /* ── Reset ─────────────────────────────────────────── */
@@ -61,25 +83,12 @@
       overflow-x: hidden;
     }
 
-    /* ── Scanline overlay — pure CSS, no images ─────────── */
-    body::before {
-      content: '';
-      position: fixed; inset: 0; pointer-events: none; z-index: 9999;
-      background: repeating-linear-gradient(
-        0deg,
-        transparent,
-        transparent 2px,
-        rgba(0,0,0,.06) 2px,
-        rgba(0,0,0,.06) 4px
-      );
-    }
-
     /* ════════════════════════════════════════════════════
        CONNECTION OVERLAY
     ════════════════════════════════════════════════════ */
     #overlay {
       position: fixed; inset: 0; z-index: 1000;
-      background: var(--bg);
+      background: var(--bg-header);
       display: flex; flex-direction: column;
       align-items: center; justify-content: center;
       gap: 24px;
@@ -91,19 +100,18 @@
       font-family: var(--font-mono);
       font-size: 11px; font-weight: 700;
       letter-spacing: .35em;
-      color: var(--green);
-      text-shadow: 0 0 12px var(--green);
+      color: var(--muted);
     }
     .ov-title {
       font-family: var(--font-mono);
       font-size: 26px; font-weight: 700;
       letter-spacing: .2em;
-      color: var(--text-bright);
+      color: var(--red);
     }
     .ov-status {
       font-family: var(--font-mono);
       font-size: 12px; letter-spacing: .15em;
-      color: var(--green);
+      color: var(--muted);
       animation: blink 1.2s step-end infinite;
     }
     .ov-error { display: none; flex-direction: column; align-items: center; gap: 16px; }
@@ -116,17 +124,18 @@
     .retry-btn {
       font-family: var(--font-mono); font-size: 12px; letter-spacing: .15em;
       padding: 10px 28px;
-      background: transparent; border: 1px solid var(--red);
-      color: var(--red); cursor: pointer;
-      transition: background .2s, color .2s;
+      background: var(--red); border: none;
+      color: #fff; cursor: pointer;
+      border-radius: 4px;
+      transition: background .2s;
     }
-    .retry-btn:hover { background: var(--red); color: var(--bg); }
+    .retry-btn:hover { background: var(--red-dim); }
 
     /* ── Dot matrix loading animation ─────────────────── */
     .dot-loader { display: flex; gap: 6px; }
     .dot-loader span {
       width: 8px; height: 8px; border-radius: 50%;
-      background: var(--green);
+      background: var(--red);
       animation: pulse-dot 1.4s ease-in-out infinite;
     }
     .dot-loader span:nth-child(2) { animation-delay: .2s; }
@@ -147,134 +156,151 @@
     #app { display: none; flex-direction: column; min-height: 100vh; }
     #app.show { display: flex; }
 
-    /* ── Top Bar ─────────────────────────────────────── */
+    /* ── Top Bar (dark header, matches original) ─────── */
     .topbar {
       display: flex; align-items: center; justify-content: space-between;
       padding: 12px 20px;
-      background: var(--bg2);
-      border-bottom: 1px solid var(--border);
+      background: var(--bg-header);
+      border-bottom: 3px solid var(--red);
     }
     .topbar-left  { display: flex; align-items: center; gap: 16px; }
     .topbar-right { display: flex; align-items: center; gap: 10px; }
 
     .brand {
-      font-family: var(--font-mono); font-size: 10px; font-weight: 700;
-      letter-spacing: .35em; color: var(--green);
-      text-shadow: 0 0 8px var(--green-glow);
+      font-family: var(--font-mono); font-size: 9px; font-weight: 700;
+      letter-spacing: .28em; color: var(--muted);
+      text-transform: uppercase;
     }
     .brand-title {
-      font-family: var(--font-mono); font-size: 15px; font-weight: 700;
-      letter-spacing: .2em; color: var(--text-bright);
+      font-family: var(--font-mono); font-size: 18px; font-weight: 700;
+      letter-spacing: .1em; color: var(--red);
     }
     .live-pill {
       display: flex; align-items: center; gap: 6px;
       padding: 4px 10px;
-      border: 1px solid var(--green-dim);
-      font-family: var(--font-mono); font-size: 10px; letter-spacing: .15em;
-      color: var(--green);
+      border: 1px solid #383838;
+      background: #2A2A2A;
+      font-family: var(--font-mono); font-size: 9px; letter-spacing: .15em;
+      color: #22c55e;
+      border-radius: 4px;
     }
     .live-dot {
       width: 7px; height: 7px; border-radius: 50%;
-      background: var(--green);
-      box-shadow: 0 0 6px var(--green);
+      background: #22c55e;
+      box-shadow: 0 0 5px #22c55e;
       animation: pulse-dot 1.8s ease-in-out infinite;
     }
 
     .ctrl-label {
-      font-family: var(--font-mono); font-size: 10px;
+      font-family: var(--font-mono); font-size: 9px;
       letter-spacing: .12em; color: var(--muted);
     }
     select, button {
-      background: var(--bg3); border: 1px solid var(--border-hl);
+      background: var(--bg2); border: 1px solid var(--border);
       color: var(--text); font-family: var(--font-ui); font-size: 12px;
-      padding: 6px 10px; cursor: pointer;
+      padding: 5px 10px; cursor: pointer;
+      border-radius: 4px;
       transition: border-color .15s;
     }
-    select:hover, button:hover { border-color: var(--green-dim); }
+    select:hover, button:hover { border-color: #999; }
     .refresh-btn {
       display: flex; align-items: center; gap: 6px;
-      padding: 6px 14px;
-      border-color: var(--green-dim); color: var(--green);
-      font-family: var(--font-mono); font-size: 11px; letter-spacing: .1em;
+      padding: 5px 14px;
+      background: var(--red); border: none; border-radius: 4px;
+      color: #fff;
+      font-family: var(--font-mono); font-size: 10px; letter-spacing: .08em;
       font-weight: 700;
     }
-    .refresh-btn:hover { background: var(--green-glow); }
+    .refresh-btn:hover { background: var(--red-dim); }
 
     .last-refresh {
       font-family: var(--font-mono); font-size: 10px;
       color: var(--muted); letter-spacing: .08em;
     }
 
-    /* ── KPI Strip ───────────────────────────────────── */
+    /* ── KPI Strip (white bar, dark chips match original) ── */
     .kpi-strip {
       display: grid;
       grid-template-columns: repeat(5, 1fr);
       border-bottom: 1px solid var(--border);
+      background: var(--bg-header);
+      padding: 8px 20px;
+      gap: 7px;
     }
     .kpi {
-      padding: 14px 20px;
-      border-right: 1px solid var(--border);
-      position: relative;
-      overflow: hidden;
+      padding: 6px 12px;
+      background: var(--bg-kpi);
+      border: 1px solid #383838;
+      border-radius: 4px;
+      text-align: center;
     }
     .kpi:last-child { border-right: none; }
-    .kpi::after {
-      content: '';
-      position: absolute; bottom: 0; left: 0; right: 0; height: 2px;
-      background: var(--green); opacity: 0;
-      transition: opacity .3s;
-    }
-    .kpi.loaded::after { opacity: 1; }
+    .kpi::after { display: none; } /* remove green underline on dark bg */
     .kpi-label {
-      font-family: var(--font-mono); font-size: 9px;
-      letter-spacing: .2em; color: var(--muted);
-      text-transform: uppercase;
+      font-family: var(--font-mono); font-size: 7px;
+      letter-spacing: .15em; color: #888;
+      text-transform: uppercase; margin-bottom: 2px;
     }
     .kpi-value {
-      font-family: var(--font-mono); font-size: 28px; font-weight: 700;
-      color: var(--green); line-height: 1;
-      text-shadow: 0 0 10px var(--green-glow);
-      margin: 4px 0 2px;
+      font-family: var(--font-mono); font-size: 22px; font-weight: 700;
+      color: #ffffff; line-height: 1;
+      margin: 2px 0;
     }
-    .kpi-sub {
-      font-family: var(--font-mono); font-size: 9px;
-      color: var(--muted); letter-spacing: .08em;
-    }
+    .kpi-sub { display: none; }
 
-    /* ── State Tiles ─────────────────────────────────── */
+    /* ── State Tiles (white bg, colored per state) ───── */
     .state-grid {
       display: grid;
       grid-template-columns: repeat(6, 1fr);
       border-bottom: 1px solid var(--border);
+      background: var(--bg2);
     }
     .state-tile {
-      padding: 10px 16px;
-      border-right: 1px solid var(--border);
-      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px;
+      border-right: 1px solid #E8E8E8;
+      display: flex; align-items: center; gap: 8px;
       cursor: pointer; transition: background .15s;
     }
     .state-tile:last-child { border-right: none; }
-    .state-tile:hover { background: var(--bg3); }
-    .state-tile.active { background: var(--bg3); border-bottom: 2px solid var(--green); }
+    .state-tile:hover { filter: brightness(.97); }
+    .state-tile.active { outline: 2px solid var(--red) inset; }
+
+    /* Tile background colors match original */
+    .state-tile:nth-child(1) { background: var(--green-bg); }
+    .state-tile:nth-child(2) { background: var(--amber-bg); }
+    .state-tile:nth-child(3) { background: var(--purple-bg); }
+    .state-tile:nth-child(4) { background: #FFF3F3; }
+    .state-tile:nth-child(5) { background: var(--blue-bg); }
+    .state-tile:nth-child(6) { background: #F4F4F4; }
 
     .tile-dot {
       width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
     }
-    .tile-dot.green  { background: var(--green);  box-shadow: 0 0 5px var(--green); }
-    .tile-dot.amber  { background: var(--amber);  box-shadow: 0 0 5px var(--amber); }
-    .tile-dot.blue   { background: var(--blue);   box-shadow: 0 0 5px var(--blue);  }
-    .tile-dot.red    { background: var(--red);    box-shadow: 0 0 5px var(--red);   }
-    .tile-dot.muted  { background: var(--muted); }
-    .tile-dot.dim    { background: var(--border-hl); }
+    .tile-dot.green  { background: var(--green); }
+    .tile-dot.amber  { background: var(--amber); }
+    .tile-dot.blue   { background: var(--blue);  }
+    .tile-dot.red    { background: var(--red);   }
+    .tile-dot.purple { background: var(--purple);}
+    .tile-dot.muted  { background: #999; }
+    .tile-dot.dim    { background: #999; }
 
     .tile-info { min-width: 0; }
     .tile-count {
-      font-family: var(--font-mono); font-size: 20px; font-weight: 700;
-      color: var(--text-bright); line-height: 1;
+      font-size: 20px; font-weight: 700;
+      color: var(--text); line-height: 1;
     }
+    /* Per-tile count colors */
+    .state-tile:nth-child(1) .tile-count { color: var(--green); }
+    .state-tile:nth-child(2) .tile-count { color: var(--amber); }
+    .state-tile:nth-child(3) .tile-count { color: var(--purple); }
+    .state-tile:nth-child(4) .tile-count { color: var(--red); }
+    .state-tile:nth-child(5) .tile-count { color: var(--blue); }
+    .state-tile:nth-child(6) .tile-count { color: #999; }
+
     .tile-name {
-      font-family: var(--font-mono); font-size: 9px;
-      color: var(--muted); letter-spacing: .1em;
+      font-size: 8px; font-weight: 600;
+      color: #777; letter-spacing: .08em;
+      text-transform: uppercase;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
 
@@ -290,200 +316,164 @@
       display: flex;
       border-bottom: 1px solid var(--border);
       background: var(--bg2);
+      padding: 0 20px;
     }
     .tab-btn {
-      font-family: var(--font-mono); font-size: 10px;
-      letter-spacing: .15em; padding: 12px 20px;
-      border: none; border-bottom: 2px solid transparent;
-      background: transparent; color: var(--muted);
+      font-size: 10px; letter-spacing: .1em; padding: 10px 16px;
+      border: none; border-bottom: 3px solid transparent;
+      background: transparent; color: #666;
       cursor: pointer; transition: color .15s, border-color .15s;
+      text-transform: uppercase; font-weight: 600;
+      margin-bottom: -1px;
     }
     .tab-btn:hover { color: var(--text); }
-    .tab-btn.active { color: var(--green); border-bottom-color: var(--green); }
+    .tab-btn.active { color: var(--red); border-bottom-color: var(--red); font-weight: 700; }
 
-    .tab-content { display: none; flex: 1; overflow: auto; }
+    .tab-content { display: none; flex: 1; overflow: auto; padding: 14px 20px; }
     .tab-content.active { display: flex; flex-direction: column; }
 
-    /* ── Fleet Table (Live Floor & Unit Stats) ─────── */
-    .fleet-table { width: 100%; border-collapse: collapse; }
+    /* ── Fleet Table ───────────────────────────────── */
+    .fleet-table { width: 100%; border-collapse: collapse; background: var(--bg2); border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
     .fleet-table th {
-      background: var(--bg2);
+      background: var(--bg3);
       padding: 10px 14px;
       text-align: left;
-      font-family: var(--font-mono); font-size: 9px;
-      letter-spacing: .18em; color: var(--muted);
+      font-size: 9px; font-weight: 700;
+      letter-spacing: .15em; color: #555;
       border-bottom: 1px solid var(--border);
+      text-transform: uppercase;
       position: sticky; top: 0; z-index: 1;
     }
     .fleet-table td {
       padding: 10px 14px;
-      border-bottom: 1px solid var(--border);
+      border-bottom: 1px solid var(--border-hl);
       vertical-align: middle;
     }
     .fleet-table tbody tr { transition: background .1s; }
-    .fleet-table tbody tr:hover { background: var(--bg3); }
+    .fleet-table tbody tr:hover { background: #F7F7F7; }
 
     .unit-name {
-      font-family: var(--font-mono); font-size: 13px; font-weight: 700;
-      color: var(--text-bright); letter-spacing: .05em;
+      font-size: 13px; font-weight: 700;
+      color: var(--text); letter-spacing: .02em;
     }
     .state-tag {
-      display: inline-flex; align-items: center; gap: 6px;
-      padding: 3px 9px;
-      font-family: var(--font-mono); font-size: 10px; letter-spacing: .1em;
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 3px 9px; border-radius: 3px;
+      font-size: 9px; font-weight: 700; letter-spacing: .08em;
+      border: 1px solid; white-space: nowrap;
     }
-    .tag-green  { border: 1px solid var(--green-dim); color: var(--green);
-                  background: var(--green-glow); }
-    .tag-amber  { border: 1px solid var(--amber-dim); color: var(--amber);
-                  background: var(--amber-glow); }
-    .tag-blue   { border: 1px solid var(--blue);      color: var(--blue);
-                  background: var(--blue-glow); }
-    .tag-muted  { border: 1px solid var(--border-hl); color: var(--muted);
-                  background: transparent; }
-    .tag-red    { border: 1px solid var(--red); color: var(--red);
-                  background: var(--red-glow); }
+    .tag-green  { background: var(--green-bg);  border-color: var(--green-border); color: var(--green); }
+    .tag-amber  { background: var(--amber-bg);  border-color: var(--amber-border); color: var(--amber); }
+    .tag-blue   { background: var(--blue-bg);   border-color: var(--blue-border);  color: var(--blue);  }
+    .tag-purple { background: var(--purple-bg); border-color: var(--purple-border);color: var(--purple);}
+    .tag-muted  { background: #F4F4F4; border-color: #CCC; color: #777; }
+    .tag-red    { background: #FFF3F3; border-color: #F0AAAA; color: var(--red); }
 
-    .mono-val {
-      font-family: var(--font-mono); font-size: 13px;
-      color: var(--text-bright);
-    }
-    .mono-muted {
-      font-family: var(--font-mono); font-size: 11px;
-      color: var(--muted);
-    }
+    .mono-val   { font-size: 13px; color: var(--text); }
+    .mono-muted { font-size: 11px; color: var(--muted); }
+
     .moves-big {
-      font-family: var(--font-mono); font-size: 20px; font-weight: 700;
-      color: var(--green);
-      text-shadow: 0 0 8px var(--green-glow);
+      font-size: 20px; font-weight: 700;
+      color: var(--text);
     }
     .moves-zero {
-      font-family: var(--font-mono); font-size: 20px; font-weight: 700;
-      color: var(--border-hl);
+      font-size: 20px; font-weight: 700;
+      color: #CCC;
     }
 
     /* Fuel mini-bar */
     .fuel-col { display: flex; flex-direction: column; gap: 4px; }
     .fuel-row { display: flex; align-items: center; gap: 6px; }
     .fuel-lbl {
-      font-family: var(--font-mono); font-size: 9px;
-      letter-spacing: .12em; color: var(--muted); width: 26px;
+      font-size: 9px; letter-spacing: .1em; color: var(--muted); width: 28px;
+      text-transform: uppercase; font-weight: 600;
     }
-    .fuel-track {
-      flex: 1; height: 4px; background: var(--border);
-    }
-    .fuel-fill { height: 100%; transition: width .4s; }
+    .fuel-track { flex: 1; height: 5px; background: #E0E0E0; border-radius: 3px; overflow: hidden; }
+    .fuel-fill { height: 100%; border-radius: 3px; transition: width .4s; }
     .fill-ok   { background: var(--green); }
     .fill-warn { background: var(--amber); }
     .fill-crit { background: var(--red);   }
-    .fuel-pct {
-      font-family: var(--font-mono); font-size: 10px;
-      width: 32px; text-align: right;
-    }
-    .pct-ok   { color: var(--green); }
-    .pct-warn { color: var(--amber); }
-    .pct-crit { color: var(--red);   }
+    .fuel-pct  { font-size: 10px; font-weight: 700; width: 32px; text-align: right; }
+    .pct-ok    { color: var(--green); }
+    .pct-warn  { color: var(--amber); }
+    .pct-crit  { color: var(--red);   }
 
     /* Sensor alert */
-    .sensor-ok   { font-family: var(--font-mono); font-size: 10px; color: var(--green); }
-    .sensor-warn { font-family: var(--font-mono); font-size: 10px; color: var(--amber);
+    .sensor-ok   { font-size: 10px; font-weight: 700; color: var(--green); }
+    .sensor-warn { font-size: 10px; font-weight: 700; color: var(--amber);
                    animation: blink 2s step-end infinite; }
 
     /* ── Unit Rank tab ───────────────────────────────── */
-    .rank-table { width: 100%; border-collapse: collapse; }
+    .rank-table { width: 100%; border-collapse: collapse; background: var(--bg2); border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
     .rank-table th {
-      background: var(--bg2); padding: 10px 14px;
-      font-family: var(--font-mono); font-size: 9px;
-      letter-spacing: .18em; color: var(--muted);
+      background: var(--bg3); padding: 10px 14px;
+      font-size: 9px; font-weight: 700;
+      letter-spacing: .15em; color: #555;
       border-bottom: 1px solid var(--border);
-      text-align: left; position: sticky; top: 0;
+      text-align: left; text-transform: uppercase;
+      position: sticky; top: 0;
     }
-    .rank-table td { padding: 10px 14px; border-bottom: 1px solid var(--border); }
-    .rank-num {
-      font-family: var(--font-mono); font-size: 11px;
-      color: var(--muted); width: 28px;
-    }
-    .rank-bar-track {
-      height: 6px; background: var(--border); flex: 1;
-    }
-    .rank-bar-fill { height: 100%; background: var(--green); transition: width .5s; }
+    .rank-table td { padding: 10px 14px; border-bottom: 1px solid var(--border-hl); }
+    .rank-num { font-size: 11px; color: var(--muted); width: 28px; }
+    .rank-bar-track { height: 6px; background: #E0E0E0; border-radius: 3px; flex: 1; }
+    .rank-bar-fill { height: 100%; background: var(--green); border-radius: 3px; transition: width .5s; }
 
     /* ── Right Panel: Alerts + Signal Key ────────────── */
     .right-panel {
-      width: 260px; flex-shrink: 0;
+      width: 275px; flex-shrink: 0;
       border-left: 1px solid var(--border);
       display: flex; flex-direction: column;
       background: var(--bg2);
     }
     .panel-block { border-bottom: 1px solid var(--border); }
     .panel-head {
-      padding: 10px 14px;
-      font-family: var(--font-mono); font-size: 9px;
-      letter-spacing: .2em; color: var(--muted);
-      background: var(--bg);
-      border-bottom: 1px solid var(--border);
+      padding: 9px 14px;
+      font-size: 9px; font-weight: 700;
+      letter-spacing: .15em; color: var(--red);
+      background: var(--bg2);
+      border-bottom: 2px solid var(--red);
+      text-transform: uppercase;
     }
 
     /* Alerts */
     .alert-list { padding: 8px; display: flex; flex-direction: column; gap: 6px; }
     .alert-none {
       padding: 16px; text-align: center;
-      font-family: var(--font-mono); font-size: 10px;
-      color: var(--green); letter-spacing: .1em;
+      font-size: 10px; color: var(--muted); letter-spacing: .08em;
     }
     .alert-item {
       padding: 8px 10px;
-      background: var(--bg3);
-      border-left: 2px solid var(--amber);
+      background: #FFF3F3;
+      border: 1px solid #F0AAAA;
+      border-left: 3px solid var(--red);
+      border-radius: 3px;
     }
-    .alert-unit {
-      font-family: var(--font-mono); font-size: 11px; font-weight: 700;
-      color: var(--amber);
-    }
-    .alert-msg {
-      font-family: var(--font-mono); font-size: 10px;
-      color: var(--text); margin-top: 2px;
-    }
+    .alert-unit { font-size: 11px; font-weight: 700; color: var(--red); }
+    .alert-msg  { font-size: 10px; color: var(--muted); margin-top: 2px; }
 
     /* Signal Key */
     .sig-list { padding: 8px; display: flex; flex-direction: column; gap: 1px; }
-    .sig-item {
-      display: flex; align-items: flex-start; gap: 8px;
-      padding: 7px 6px;
-    }
-    .sig-dot {
-      width: 8px; height: 8px; border-radius: 50%; margin-top: 2px; flex-shrink: 0;
-    }
+    .sig-item { display: flex; align-items: flex-start; gap: 10px; padding: 7px 6px; }
+    .sig-dot  { width: 3px; height: 30px; border-radius: 2px; margin-top: 1px; flex-shrink: 0; }
     .sig-text {}
-    .sig-title {
-      font-family: var(--font-mono); font-size: 10px; font-weight: 700;
-      color: var(--text-bright);
-    }
-    .sig-desc {
-      font-family: var(--font-mono); font-size: 9px;
-      color: var(--muted); margin-top: 1px;
-    }
+    .sig-title { font-size: 9px; font-weight: 700; color: var(--text); }
+    .sig-desc  { font-size: 8px; color: var(--muted); margin-top: 2px; }
 
     /* Footer */
     .footer {
-      padding: 10px 20px;
+      padding: 8px 20px;
       border-top: 1px solid var(--border);
       display: flex; justify-content: space-between; align-items: center;
-      background: var(--bg);
+      background: var(--bg2);
     }
-    .footer-left {
-      font-family: var(--font-mono); font-size: 9px;
-      letter-spacing: .12em; color: var(--muted);
-    }
-    .footer-right {
-      font-family: var(--font-mono); font-size: 9px;
-      color: var(--muted); letter-spacing: .08em;
-    }
+    .footer-left  { font-size: 9px; color: var(--muted); }
+    .footer-right { font-size: 9px; color: var(--muted); }
 
     /* Loading skeleton */
     .skel-row td { padding: 12px 14px; }
     .skel {
-      height: 12px; border-radius: 1px;
-      background: linear-gradient(90deg, var(--bg3) 25%, var(--border) 50%, var(--bg3) 75%);
+      height: 12px; border-radius: 2px;
+      background: linear-gradient(90deg, #F0F0F0 25%, #E0E0E0 50%, #F0F0F0 75%);
       background-size: 200% 100%;
       animation: shimmer 1.5s infinite;
     }
@@ -565,35 +555,35 @@
         </div>
       </div>
       <div class="state-tile" data-filter="trailer-idle">
-        <div class="tile-dot blue"></div>
+        <div class="tile-dot amber"></div>
         <div class="tile-info">
           <div class="tile-count" id="sc1">0</div>
           <div class="tile-name">Trailer Idle</div>
         </div>
       </div>
       <div class="state-tile" data-filter="bobtail-move">
-        <div class="tile-dot amber"></div>
+        <div class="tile-dot purple"></div>
         <div class="tile-info">
           <div class="tile-count" id="sc2">0</div>
           <div class="tile-name">Bobtail Move</div>
         </div>
       </div>
       <div class="state-tile" data-filter="bobtail-idle">
-        <div class="tile-dot amber" style="opacity:.5"></div>
+        <div class="tile-dot red"></div>
         <div class="tile-info">
           <div class="tile-count" id="sc3">0</div>
           <div class="tile-name">Bobtail Idle</div>
         </div>
       </div>
       <div class="state-tile" data-filter="no-iox">
-        <div class="tile-dot muted"></div>
+        <div class="tile-dot blue"></div>
         <div class="tile-info">
           <div class="tile-count" id="sc4">0</div>
           <div class="tile-name">Moving (No IOX)</div>
         </div>
       </div>
       <div class="state-tile" data-filter="parked">
-        <div class="tile-dot dim"></div>
+        <div class="tile-dot muted"></div>
         <div class="tile-info">
           <div class="tile-count" id="sc5">0</div>
           <div class="tile-name">Parked / Off</div>
@@ -675,44 +665,44 @@
           <div class="panel-head">SIGNAL KEY</div>
           <div class="sig-list">
             <div class="sig-item">
-              <div class="sig-dot" style="background:var(--green);box-shadow:0 0 4px var(--green);"></div>
+              <div class="sig-dot" style="background:#1B7A1B;"></div>
               <div class="sig-text">
-                <div class="sig-title">IOX AUX1 HIGH + Moving</div>
+                <div class="sig-title" style="color:#1B7A1B;">IOX AUX1 HIGH + Moving</div>
                 <div class="sig-desc">Fifth wheel latched, in transit</div>
               </div>
             </div>
             <div class="sig-item">
-              <div class="sig-dot" style="background:var(--blue);box-shadow:0 0 4px var(--blue);"></div>
+              <div class="sig-dot" style="background:#B87800;"></div>
               <div class="sig-text">
-                <div class="sig-title">IOX AUX1 HIGH + Stopped</div>
+                <div class="sig-title" style="color:#B87800;">IOX AUX1 HIGH + Stopped</div>
                 <div class="sig-desc">Hooked, at dock / waiting</div>
               </div>
             </div>
             <div class="sig-item">
-              <div class="sig-dot" style="background:var(--amber);box-shadow:0 0 4px var(--amber);"></div>
+              <div class="sig-dot" style="background:#6B21A8;"></div>
               <div class="sig-text">
-                <div class="sig-title">IOX AUX1 LOW + Moving</div>
+                <div class="sig-title" style="color:#6B21A8;">IOX AUX1 LOW + Moving</div>
                 <div class="sig-desc">Repositioning without trailer</div>
               </div>
             </div>
             <div class="sig-item">
-              <div class="sig-dot" style="background:var(--amber);opacity:.5;"></div>
+              <div class="sig-dot" style="background:#CC0000;"></div>
               <div class="sig-text">
-                <div class="sig-title">IOX AUX1 LOW + Stopped</div>
+                <div class="sig-title" style="color:#CC0000;">IOX AUX1 LOW + Stopped</div>
                 <div class="sig-desc">Idle bobtail — fuel waste</div>
               </div>
             </div>
             <div class="sig-item">
-              <div class="sig-dot" style="background:var(--muted);"></div>
+              <div class="sig-dot" style="background:#3B5BDB;"></div>
               <div class="sig-text">
-                <div class="sig-title">Moving (No IOX-AUX)</div>
+                <div class="sig-title" style="color:#3B5BDB;">Moving (No IOX-AUX)</div>
                 <div class="sig-desc">GO9 speed only</div>
               </div>
             </div>
             <div class="sig-item">
-              <div class="sig-dot" style="background:var(--border-hl);"></div>
+              <div class="sig-dot" style="background:#999;"></div>
               <div class="sig-text">
-                <div class="sig-title">Parked / Engine Off</div>
+                <div class="sig-title" style="color:#777;">Parked / Engine Off</div>
                 <div class="sig-desc">GO9 still reports fuel &amp; DEF</div>
               </div>
             </div>
@@ -724,7 +714,9 @@
     <!-- Footer -->
     <div class="footer">
       <div class="footer-left">FleetSource Leasing · 2382 Route 130, Dayton, NJ 08810</div>
-      <div class="footer-right">SPOTTER IQ · A FLEETSOURCE IQ PRODUCT · GO9 · IOX-AUX optional · v2.0.0</div>
+      <div class="footer-right">
+        <span style="font-weight:700;color:#888;letter-spacing:.14em;">SPOTTER</span><span style="font-weight:700;color:#CC0000;letter-spacing:.1em;"> IQ</span><span style="color:#888;"> · A FLEETSOURCE IQ PRODUCT · GO9 · IOX-AUX optional · v2.0.0</span>
+      </div>
     </div>
 
   </div><!-- /app -->
@@ -742,7 +734,7 @@
      object is already present before this script runs.
   ────────────────────────────────────────────────────────────────*/
   if (typeof geotab === 'undefined') {
-    console.info('[SpotterIQ] Running in LOCAL DEV mode — using mock data.');
+    console.log('[SpotterIQ] Running in LOCAL DEV mode — using mock data.');
 
     // Helpers to build realistic StatusData time-series
     function makeNow() { return new Date().toISOString(); }
@@ -900,7 +892,7 @@
         var factory = window.geotab.addin[name];
         var instance = factory(mockApi, {});
         instance.initialize(mockApi, {}, function () {
-          console.info('[SpotterIQ] Mock initialize() complete.');
+          console.log('[SpotterIQ] Mock initialize() complete.');
         });
       }
     };
@@ -955,39 +947,8 @@
     var _assetData = [];
 
     // ════════════════════════════════════════════════════════
-    return {
-
-      initialize: function (api, state, callback) {
-        _api = api;
-        document.getElementById('shiftStart')
-          .addEventListener('change', function () { IQ.refresh(); });
-        document.getElementById('refreshBtn')
-          .addEventListener('click',  function () { IQ.refresh(); });
-        document.getElementById('retryBtn')
-          .addEventListener('click',  function () { IQ.refresh(); });
-
-        // Tab switching
-        var tabs = document.querySelectorAll('.tab-btn');
-        for (var i = 0; i < tabs.length; i++) {
-          tabs[i].addEventListener('click', function () {
-            document.querySelectorAll('.tab-btn').forEach(function (b) { b.classList.remove('active'); });
-            document.querySelectorAll('.tab-content').forEach(function (c) { c.classList.remove('active'); });
-            this.classList.add('active');
-            document.getElementById('tab-' + this.dataset.tab).classList.add('active');
-          });
-        }
-
-        IQ.refresh();
-        callback();
-      },
-
-      focus: function (api, state) { IQ.refresh(); },
-      blur:  function () {}
-
-    }; // end return
-
-    // ════════════════════════════════════════════════════════
-    //  Internal namespace
+    //  Internal namespace — defined BEFORE return so it is
+    //  in scope when initialize() calls IQ.refresh()
     // ════════════════════════════════════════════════════════
     var IQ = {
 
@@ -1297,9 +1258,9 @@
 
       // ── Row builders ─────────────────────────────────────
       liveRow: function (a) {
-        var tagCls = { 'trailer-move':'tag-green','trailer-idle':'tag-blue',
-                       'bobtail-move':'tag-amber','bobtail-idle':'tag-amber',
-                       'no-iox':'tag-muted','parked':'tag-muted','OFFLINE':'tag-red' };
+        var tagCls = { 'trailer-move':'tag-green','trailer-idle':'tag-amber',
+                       'bobtail-move':'tag-purple','bobtail-idle':'tag-red',
+                       'no-iox':'tag-blue','parked':'tag-muted','OFFLINE':'tag-red' };
         var cls = a.offline ? 'tag-red' : (tagCls[a.stateKey] || 'tag-muted');
         var movesHtml = a.offline ? '<span class="moves-zero">—</span>'
           : (a.moves > 0
@@ -1335,9 +1296,9 @@
 
       rankRow: function (a, rank, max) {
         var pct = max > 0 ? Math.round((a.moves / max) * 100) : 0;
-        var tagCls = { 'trailer-move':'tag-green','trailer-idle':'tag-blue',
-                       'bobtail-move':'tag-amber','bobtail-idle':'tag-amber',
-                       'no-iox':'tag-muted','parked':'tag-muted' };
+        var tagCls = { 'trailer-move':'tag-green','trailer-idle':'tag-amber',
+                       'bobtail-move':'tag-purple','bobtail-idle':'tag-red',
+                       'no-iox':'tag-blue','parked':'tag-muted' };
         var cls = a.offline ? 'tag-red' : (tagCls[a.stateKey] || 'tag-muted');
         return '<tr>' +
           '<td><span class="rank-num">#' + rank + '</span></td>' +
@@ -1392,6 +1353,40 @@
       }
 
     }; // end IQ
+
+    // ════════════════════════════════════════════════════════
+    //  MyGeotab Add-in interface — returned to the host
+    // ════════════════════════════════════════════════════════
+    return {
+
+      initialize: function (api, state, callback) {
+        _api = api;
+        document.getElementById('shiftStart')
+          .addEventListener('change', function () { IQ.refresh(); });
+        document.getElementById('refreshBtn')
+          .addEventListener('click',  function () { IQ.refresh(); });
+        document.getElementById('retryBtn')
+          .addEventListener('click',  function () { IQ.refresh(); });
+
+        // Tab switching
+        var tabs = document.querySelectorAll('.tab-btn');
+        for (var i = 0; i < tabs.length; i++) {
+          tabs[i].addEventListener('click', function () {
+            document.querySelectorAll('.tab-btn').forEach(function (b) { b.classList.remove('active'); });
+            document.querySelectorAll('.tab-content').forEach(function (c) { c.classList.remove('active'); });
+            this.classList.add('active');
+            document.getElementById('tab-' + this.dataset.tab).classList.add('active');
+          });
+        }
+
+        IQ.refresh();
+        callback();
+      },
+
+      focus: function (api, state) { IQ.refresh(); },
+      blur:  function () {}
+
+    }; // end return
 
   }; // end addin factory
   </script>
