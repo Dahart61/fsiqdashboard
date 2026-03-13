@@ -1,1394 +1,1075 @@
 <!DOCTYPE html>
 <html lang="en">
-<!--
-  SpotterIQ — Yard Command  v2.0.0
-  A FleetSource IQ Platform Product
-  MyGeotab Add-in | Handshake: geotab.addin.spotterIQ
-  ─────────────────────────────────────────────────────
-  MYGEOTAB COMPATIBILITY NOTES:
-  • Zero external dependencies — no Google Fonts, no CDNs
-  • Uses only api.call / api.multiCall (no fetch/XHR to Geotab)
-  • initialize() calls callback() synchronously
-  • ES5-safe var declarations; no import/export
-  • Inline SVG icons — no icon fonts needed
-  • All CSS variables with IE11 fallbacks where critical
-  • Group-aware: Geotab API auto-filters to the logged-in
-    user's assigned group — no per-customer code changes needed
--->
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>SpotterIQ — Yard Command</title>
-  <style>
-    /* ═══════════════════════════════════════════════════════
-       DESIGN TOKENS — SpotterIQ Light Theme
-       Matches fleetsource.com/cdn/shop/t/3/assets/yard-command.html
-       Light gray body · White cards · Dark header · Red accent
-    ═══════════════════════════════════════════════════════ */
-    :root {
-      /* Surfaces */
-      --bg:          #F0F2F5;   /* page body */
-      --bg2:         #ffffff;   /* cards, panels, tabs, filter bar */
-      --bg3:         #F5F5F5;   /* hover rows, nested cells */
-      --bg-header:   #1F1F1F;   /* top header bar (stays dark) */
-      --bg-kpi:      #2A2A2A;   /* KPI chips inside dark header */
-      --border:      #CCCCCC;
-      --border-hl:   #E0E0E0;
-
-      /* Brand accent */
-      --red:         #CC0000;
-      --red-dim:     #AA0000;
-      --red-glow:    rgba(204,0,0,.10);
-
-      /* State colors — exact match to original */
-      --green:       #1B7A1B;   /* Trailer Move */
-      --green-dim:   #1B5E20;
-      --green-glow:  rgba(27,122,27,.10);
-      --green-bg:    #F0FAF0;
-      --green-border:#A8D5A8;
-
-      --amber:       #B87800;   /* Trailer Idle */
-      --amber-dim:   #8B5E00;
-      --amber-glow:  rgba(184,120,0,.10);
-      --amber-bg:    #FFFBF0;
-      --amber-border:#F0D080;
-
-      --purple:      #6B21A8;   /* Bobtail Move */
-      --purple-bg:   #FAF0FF;
-      --purple-border:#CCA8E8;
-
-      --blue:        #3B5BDB;   /* Moving / No IOX */
-      --blue-bg:     #F0F4FF;
-      --blue-border: #B0C4FF;
-      --blue-glow:   rgba(59,91,219,.10);
-
-      --muted:       #888888;
-      --text:        #1A1A1A;
-      --text-bright: #1A1A1A;
-      --text-on-dark:#ffffff;
-
-      /* Fonts */
-      --font-mono:  'Courier New', 'Lucida Console', monospace;
-      --font-ui:    Arial, 'Segoe UI', sans-serif;
-    }
-
-    /* ── Reset ─────────────────────────────────────────── */
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body {
-      width: 100%; height: 100%;
-      background: var(--bg);
-      color: var(--text);
-      font-family: var(--font-ui);
-      font-size: 13px;
-      overflow-x: hidden;
-    }
-
-    /* ════════════════════════════════════════════════════
-       CONNECTION OVERLAY
-    ════════════════════════════════════════════════════ */
-    #overlay {
-      position: fixed; inset: 0; z-index: 1000;
-      background: var(--bg-header);
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
-      gap: 24px;
-      transition: opacity .5s ease;
-    }
-    #overlay.hidden { opacity: 0; pointer-events: none; }
-
-    .ov-logo {
-      font-family: var(--font-mono);
-      font-size: 11px; font-weight: 700;
-      letter-spacing: .35em;
-      color: var(--muted);
-    }
-    .ov-title {
-      font-family: var(--font-mono);
-      font-size: 26px; font-weight: 700;
-      letter-spacing: .2em;
-      color: var(--red);
-    }
-    .ov-status {
-      font-family: var(--font-mono);
-      font-size: 12px; letter-spacing: .15em;
-      color: var(--muted);
-      animation: blink 1.2s step-end infinite;
-    }
-    .ov-error { display: none; flex-direction: column; align-items: center; gap: 16px; }
-    .ov-error.show { display: flex; }
-    .ov-error-icon { font-size: 36px; }
-    .ov-error-msg {
-      font-family: var(--font-mono); font-size: 13px;
-      color: var(--red); letter-spacing: .1em;
-    }
-    .retry-btn {
-      font-family: var(--font-mono); font-size: 12px; letter-spacing: .15em;
-      padding: 10px 28px;
-      background: var(--red); border: none;
-      color: #fff; cursor: pointer;
-      border-radius: 4px;
-      transition: background .2s;
-    }
-    .retry-btn:hover { background: var(--red-dim); }
-
-    /* ── Dot matrix loading animation ─────────────────── */
-    .dot-loader { display: flex; gap: 6px; }
-    .dot-loader span {
-      width: 8px; height: 8px; border-radius: 50%;
-      background: var(--red);
-      animation: pulse-dot 1.4s ease-in-out infinite;
-    }
-    .dot-loader span:nth-child(2) { animation-delay: .2s; }
-    .dot-loader span:nth-child(3) { animation-delay: .4s; }
-
-    @keyframes pulse-dot {
-      0%, 80%, 100% { opacity: .2; transform: scale(.8); }
-      40%           { opacity: 1;  transform: scale(1);   }
-    }
-    @keyframes blink {
-      0%, 100% { opacity: 1; }
-      50%      { opacity: 0; }
-    }
-
-    /* ════════════════════════════════════════════════════
-       MAIN SHELL
-    ════════════════════════════════════════════════════ */
-    #app { display: none; flex-direction: column; min-height: 100vh; }
-    #app.show { display: flex; }
-
-    /* ── Top Bar (dark header, matches original) ─────── */
-    .topbar {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 12px 20px;
-      background: var(--bg-header);
-      border-bottom: 3px solid var(--red);
-    }
-    .topbar-left  { display: flex; align-items: center; gap: 16px; }
-    .topbar-right { display: flex; align-items: center; gap: 10px; }
-
-    .brand {
-      font-family: var(--font-mono); font-size: 9px; font-weight: 700;
-      letter-spacing: .28em; color: var(--muted);
-      text-transform: uppercase;
-    }
-    .brand-title {
-      font-family: var(--font-mono); font-size: 18px; font-weight: 700;
-      letter-spacing: .1em; color: var(--red);
-    }
-    .live-pill {
-      display: flex; align-items: center; gap: 6px;
-      padding: 4px 10px;
-      border: 1px solid #383838;
-      background: #2A2A2A;
-      font-family: var(--font-mono); font-size: 9px; letter-spacing: .15em;
-      color: #22c55e;
-      border-radius: 4px;
-    }
-    .live-dot {
-      width: 7px; height: 7px; border-radius: 50%;
-      background: #22c55e;
-      box-shadow: 0 0 5px #22c55e;
-      animation: pulse-dot 1.8s ease-in-out infinite;
-    }
-
-    .ctrl-label {
-      font-family: var(--font-mono); font-size: 9px;
-      letter-spacing: .12em; color: var(--muted);
-    }
-    select, button {
-      background: var(--bg2); border: 1px solid var(--border);
-      color: var(--text); font-family: var(--font-ui); font-size: 12px;
-      padding: 5px 10px; cursor: pointer;
-      border-radius: 4px;
-      transition: border-color .15s;
-    }
-    select:hover, button:hover { border-color: #999; }
-    .refresh-btn {
-      display: flex; align-items: center; gap: 6px;
-      padding: 5px 14px;
-      background: var(--red); border: none; border-radius: 4px;
-      color: #fff;
-      font-family: var(--font-mono); font-size: 10px; letter-spacing: .08em;
-      font-weight: 700;
-    }
-    .refresh-btn:hover { background: var(--red-dim); }
-
-    .last-refresh {
-      font-family: var(--font-mono); font-size: 10px;
-      color: var(--muted); letter-spacing: .08em;
-    }
-
-    /* ── KPI Strip (white bar, dark chips match original) ── */
-    .kpi-strip {
-      display: grid;
-      grid-template-columns: repeat(5, 1fr);
-      border-bottom: 1px solid var(--border);
-      background: var(--bg-header);
-      padding: 8px 20px;
-      gap: 7px;
-    }
-    .kpi {
-      padding: 6px 12px;
-      background: var(--bg-kpi);
-      border: 1px solid #383838;
-      border-radius: 4px;
-      text-align: center;
-    }
-    .kpi:last-child { border-right: none; }
-    .kpi::after { display: none; } /* remove green underline on dark bg */
-    .kpi-label {
-      font-family: var(--font-mono); font-size: 7px;
-      letter-spacing: .15em; color: #888;
-      text-transform: uppercase; margin-bottom: 2px;
-    }
-    .kpi-value {
-      font-family: var(--font-mono); font-size: 22px; font-weight: 700;
-      color: #ffffff; line-height: 1;
-      margin: 2px 0;
-    }
-    .kpi-sub { display: none; }
-
-    /* ── State Tiles (white bg, colored per state) ───── */
-    .state-grid {
-      display: grid;
-      grid-template-columns: repeat(6, 1fr);
-      border-bottom: 1px solid var(--border);
-      background: var(--bg2);
-    }
-    .state-tile {
-      padding: 10px 12px;
-      border-right: 1px solid #E8E8E8;
-      display: flex; align-items: center; gap: 8px;
-      cursor: pointer; transition: background .15s;
-    }
-    .state-tile:last-child { border-right: none; }
-    .state-tile:hover { filter: brightness(.97); }
-    .state-tile.active { outline: 2px solid var(--red) inset; }
-
-    /* Tile background colors match original */
-    .state-tile:nth-child(1) { background: var(--green-bg); }
-    .state-tile:nth-child(2) { background: var(--amber-bg); }
-    .state-tile:nth-child(3) { background: var(--purple-bg); }
-    .state-tile:nth-child(4) { background: #FFF3F3; }
-    .state-tile:nth-child(5) { background: var(--blue-bg); }
-    .state-tile:nth-child(6) { background: #F4F4F4; }
-
-    .tile-dot {
-      width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
-    }
-    .tile-dot.green  { background: var(--green); }
-    .tile-dot.amber  { background: var(--amber); }
-    .tile-dot.blue   { background: var(--blue);  }
-    .tile-dot.red    { background: var(--red);   }
-    .tile-dot.purple { background: var(--purple);}
-    .tile-dot.muted  { background: #999; }
-    .tile-dot.dim    { background: #999; }
-
-    .tile-info { min-width: 0; }
-    .tile-count {
-      font-size: 20px; font-weight: 700;
-      color: var(--text); line-height: 1;
-    }
-    /* Per-tile count colors */
-    .state-tile:nth-child(1) .tile-count { color: var(--green); }
-    .state-tile:nth-child(2) .tile-count { color: var(--amber); }
-    .state-tile:nth-child(3) .tile-count { color: var(--purple); }
-    .state-tile:nth-child(4) .tile-count { color: var(--red); }
-    .state-tile:nth-child(5) .tile-count { color: var(--blue); }
-    .state-tile:nth-child(6) .tile-count { color: #999; }
-
-    .tile-name {
-      font-size: 8px; font-weight: 600;
-      color: #777; letter-spacing: .08em;
-      text-transform: uppercase;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-
-    /* ── Main Content Area ───────────────────────────── */
-    .content-area {
-      display: flex; flex: 1; min-height: 0;
-    }
-
-    /* Left: tabbed panel */
-    .left-panel { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-
-    .tab-bar {
-      display: flex;
-      border-bottom: 1px solid var(--border);
-      background: var(--bg2);
-      padding: 0 20px;
-    }
-    .tab-btn {
-      font-size: 10px; letter-spacing: .1em; padding: 10px 16px;
-      border: none; border-bottom: 3px solid transparent;
-      background: transparent; color: #666;
-      cursor: pointer; transition: color .15s, border-color .15s;
-      text-transform: uppercase; font-weight: 600;
-      margin-bottom: -1px;
-    }
-    .tab-btn:hover { color: var(--text); }
-    .tab-btn.active { color: var(--red); border-bottom-color: var(--red); font-weight: 700; }
-
-    .tab-content { display: none; flex: 1; overflow: auto; padding: 14px 20px; }
-    .tab-content.active { display: flex; flex-direction: column; }
-
-    /* ── Fleet Table ───────────────────────────────── */
-    .fleet-table { width: 100%; border-collapse: collapse; background: var(--bg2); border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
-    .fleet-table th {
-      background: var(--bg3);
-      padding: 10px 14px;
-      text-align: left;
-      font-size: 9px; font-weight: 700;
-      letter-spacing: .15em; color: #555;
-      border-bottom: 1px solid var(--border);
-      text-transform: uppercase;
-      position: sticky; top: 0; z-index: 1;
-    }
-    .fleet-table td {
-      padding: 10px 14px;
-      border-bottom: 1px solid var(--border-hl);
-      vertical-align: middle;
-    }
-    .fleet-table tbody tr { transition: background .1s; }
-    .fleet-table tbody tr:hover { background: #F7F7F7; }
-
-    .unit-name {
-      font-size: 13px; font-weight: 700;
-      color: var(--text); letter-spacing: .02em;
-    }
-    .state-tag {
-      display: inline-flex; align-items: center; gap: 5px;
-      padding: 3px 9px; border-radius: 3px;
-      font-size: 9px; font-weight: 700; letter-spacing: .08em;
-      border: 1px solid; white-space: nowrap;
-    }
-    .tag-green  { background: var(--green-bg);  border-color: var(--green-border); color: var(--green); }
-    .tag-amber  { background: var(--amber-bg);  border-color: var(--amber-border); color: var(--amber); }
-    .tag-blue   { background: var(--blue-bg);   border-color: var(--blue-border);  color: var(--blue);  }
-    .tag-purple { background: var(--purple-bg); border-color: var(--purple-border);color: var(--purple);}
-    .tag-muted  { background: #F4F4F4; border-color: #CCC; color: #777; }
-    .tag-red    { background: #FFF3F3; border-color: #F0AAAA; color: var(--red); }
-
-    .mono-val   { font-size: 13px; color: var(--text); }
-    .mono-muted { font-size: 11px; color: var(--muted); }
-
-    .moves-big {
-      font-size: 20px; font-weight: 700;
-      color: var(--text);
-    }
-    .moves-zero {
-      font-size: 20px; font-weight: 700;
-      color: #CCC;
-    }
-
-    /* Fuel mini-bar */
-    .fuel-col { display: flex; flex-direction: column; gap: 4px; }
-    .fuel-row { display: flex; align-items: center; gap: 6px; }
-    .fuel-lbl {
-      font-size: 9px; letter-spacing: .1em; color: var(--muted); width: 28px;
-      text-transform: uppercase; font-weight: 600;
-    }
-    .fuel-track { flex: 1; height: 5px; background: #E0E0E0; border-radius: 3px; overflow: hidden; }
-    .fuel-fill { height: 100%; border-radius: 3px; transition: width .4s; }
-    .fill-ok   { background: var(--green); }
-    .fill-warn { background: var(--amber); }
-    .fill-crit { background: var(--red);   }
-    .fuel-pct  { font-size: 10px; font-weight: 700; width: 32px; text-align: right; }
-    .pct-ok    { color: var(--green); }
-    .pct-warn  { color: var(--amber); }
-    .pct-crit  { color: var(--red);   }
-
-    /* Sensor alert */
-    .sensor-ok   { font-size: 10px; font-weight: 700; color: var(--green); }
-    .sensor-warn { font-size: 10px; font-weight: 700; color: var(--amber);
-                   animation: blink 2s step-end infinite; }
-
-    /* ── Unit Rank tab ───────────────────────────────── */
-    .rank-table { width: 100%; border-collapse: collapse; background: var(--bg2); border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
-    .rank-table th {
-      background: var(--bg3); padding: 10px 14px;
-      font-size: 9px; font-weight: 700;
-      letter-spacing: .15em; color: #555;
-      border-bottom: 1px solid var(--border);
-      text-align: left; text-transform: uppercase;
-      position: sticky; top: 0;
-    }
-    .rank-table td { padding: 10px 14px; border-bottom: 1px solid var(--border-hl); }
-    .rank-num { font-size: 11px; color: var(--muted); width: 28px; }
-    .rank-bar-track { height: 6px; background: #E0E0E0; border-radius: 3px; flex: 1; }
-    .rank-bar-fill { height: 100%; background: var(--green); border-radius: 3px; transition: width .5s; }
-
-    /* ── Right Panel: Alerts + Signal Key ────────────── */
-    .right-panel {
-      width: 275px; flex-shrink: 0;
-      border-left: 1px solid var(--border);
-      display: flex; flex-direction: column;
-      background: var(--bg2);
-    }
-    .panel-block { border-bottom: 1px solid var(--border); }
-    .panel-head {
-      padding: 9px 14px;
-      font-size: 9px; font-weight: 700;
-      letter-spacing: .15em; color: var(--red);
-      background: var(--bg2);
-      border-bottom: 2px solid var(--red);
-      text-transform: uppercase;
-    }
-
-    /* Alerts */
-    .alert-list { padding: 8px; display: flex; flex-direction: column; gap: 6px; }
-    .alert-none {
-      padding: 16px; text-align: center;
-      font-size: 10px; color: var(--muted); letter-spacing: .08em;
-    }
-    .alert-item {
-      padding: 8px 10px;
-      background: #FFF3F3;
-      border: 1px solid #F0AAAA;
-      border-left: 3px solid var(--red);
-      border-radius: 3px;
-    }
-    .alert-unit { font-size: 11px; font-weight: 700; color: var(--red); }
-    .alert-msg  { font-size: 10px; color: var(--muted); margin-top: 2px; }
-
-    /* Signal Key */
-    .sig-list { padding: 8px; display: flex; flex-direction: column; gap: 1px; }
-    .sig-item { display: flex; align-items: flex-start; gap: 10px; padding: 7px 6px; }
-    .sig-dot  { width: 3px; height: 30px; border-radius: 2px; margin-top: 1px; flex-shrink: 0; }
-    .sig-text {}
-    .sig-title { font-size: 9px; font-weight: 700; color: var(--text); }
-    .sig-desc  { font-size: 8px; color: var(--muted); margin-top: 2px; }
-
-    /* Footer */
-    .footer {
-      padding: 8px 20px;
-      border-top: 1px solid var(--border);
-      display: flex; justify-content: space-between; align-items: center;
-      background: var(--bg2);
-    }
-    .footer-left  { font-size: 9px; color: var(--muted); }
-    .footer-right { font-size: 9px; color: var(--muted); }
-
-    /* Loading skeleton */
-    .skel-row td { padding: 12px 14px; }
-    .skel {
-      height: 12px; border-radius: 2px;
-      background: linear-gradient(90deg, #F0F0F0 25%, #E0E0E0 50%, #F0F0F0 75%);
-      background-size: 200% 100%;
-      animation: shimmer 1.5s infinite;
-    }
-    @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
-  </style>
+<meta charset="UTF-8"/>
+<title>FleetSource IQ — Spotter IQ</title>
+<style>
+@keyframes fiq-spin   { to{transform:rotate(360deg)} }
+@keyframes fiq-blink  { 0%,100%{opacity:1} 50%{opacity:.3} }
+@keyframes fiq-ripple { 0%{transform:scale(1);opacity:.5} 100%{transform:scale(2.6);opacity:0} }
+@keyframes fiq-scan   { 0%{transform:translateY(-100%)} 100%{transform:translateY(600%)} }
+.fiq-spinner { width:40px;height:40px;border:4px solid #333;border-top-color:#CC0000;border-radius:50%;animation:fiq-spin .9s linear infinite; }
+.fiq-scanline { position:absolute;top:0;left:0;right:0;height:2px;background:rgba(204,0,0,.15);animation:fiq-scan 5s linear infinite;pointer-events:none; }
+.fiq-dot  { position:relative;display:inline-block;width:9px;height:9px;flex-shrink:0;vertical-align:middle; }
+.fiq-dotr { position:absolute;inset:0;border-radius:50%;opacity:.35;animation:fiq-ripple 1.8s ease-out infinite; }
+.fiq-dotc { position:absolute;inset:2px;border-radius:50%; }
+.fiq-gauge { height:5px;background:#E0E0E0;border-radius:3px;margin-top:3px;overflow:hidden; }
+.fiq-gf   { height:100%;border-radius:3px;transition:width .8s; }
+.fiq-blink  { animation:fiq-blink 1.8s infinite; }
+.fiq-blink2 { animation:fiq-blink 1.5s infinite; }
+</style>
 </head>
-<body>
+<body style="margin:0;padding:0">
 
-  <!-- ══════════════════════════════════════════════════
-       CONNECTION OVERLAY
-  ══════════════════════════════════════════════════ -->
-  <div id="overlay">
-    <div class="ov-logo">SPOTTER · IQ</div>
-    <div class="ov-title">YARD COMMAND</div>
-    <div id="ov-connecting">
-      <div class="ov-status" id="ovStatus">CONNECTING TO MYGEOTAB…</div>
-      <div class="dot-loader" style="margin-top:16px;">
-        <span></span><span></span><span></span>
-      </div>
-    </div>
-    <div class="ov-error" id="ovError">
-      <div class="ov-error-icon">⚠</div>
-      <div class="ov-error-msg">CONNECTION ERROR</div>
-      <button class="retry-btn" id="retryBtn">↻ RETRY</button>
-    </div>
+<div id="fiq-root">
+  <!-- LOADING SCREEN -->
+  <div id="fiq-loading">
+    <div class="fiq-spinner"></div>
+    <div style="color:#888;font-size:11px;letter-spacing:.15em">CONNECTING TO MYGEOTAB…</div>
   </div>
 
-  <!-- ══════════════════════════════════════════════════
-       MAIN APPLICATION
-  ══════════════════════════════════════════════════ -->
-  <div id="app">
+  <!-- ERROR SCREEN -->
+  <div id="fiq-error" style="display:none">
+    <div style="font-size:30px">⚠️</div>
+    <div style="color:#CC0000;font-weight:bold;font-size:13px;letter-spacing:.1em">CONNECTION ERROR</div>
+    <div id="fiq-err" style="color:#888;font-size:11px;max-width:360px;margin-top:8px"></div>
+    <button id="fiq-retry" style="margin-top:12px;padding:6px 16px;background:#CC0000;color:#fff;border:none;border-radius:4px;font-size:11px;font-weight:bold;cursor:pointer">RETRY</button>
+  </div>
 
-    <!-- Top Bar -->
-    <div class="topbar">
-      <div class="topbar-left">
-        <div>
-          <div class="brand">FLEETSOURCE IQ · SPOTTER</div>
-          <div class="brand-title">YARD COMMAND</div>
+  <!-- MAIN APP -->
+  <div id="fiq-app" style="display:none">
+
+    <!-- HEADER -->
+    <div id="fiq-header">
+      <div class="fiq-scanline"></div>
+      <div id="fiq-htop">
+        <div id="fiq-hlogo">
+          <svg width="34" height="38" viewBox="0 0 38 42" fill="none">
+            <defs><linearGradient id="fsg" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#CC0000"/><stop offset="100%" stop-color="#FF5555"/></linearGradient></defs>
+            <path d="M 3 21 A 16 16 0 0 1 35 21" stroke="url(#fsg)" stroke-width="2.5" fill="none" stroke-linecap="round" opacity=".4"/>
+            <path d="M 7 21 A 12 12 0 0 1 31 21" stroke="url(#fsg)" stroke-width="2.5" fill="none" stroke-linecap="round" opacity=".65"/>
+            <path d="M 11 21 A 8 8 0 0 1 27 21" stroke="url(#fsg)" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+            <circle cx="19" cy="21" r="3" fill="#CC0000"/>
+            <line x1="19" y1="21" x2="19" y2="36" stroke="#CC0000" stroke-width="2.2" stroke-linecap="round"/>
+            <line x1="13" y1="36" x2="25" y2="36" stroke="#CC0000" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          <div style="padding-left:5px"><div id="fiq-hco">FLEETSOURCE</div><div id="fiq-hiq">IQ</div></div>
+          <div id="fiq-hdiv"></div>
+          <div><div id="fiq-hyard">SPOTTER</div><div id="fiq-hcmd">IQ</div></div>
         </div>
-        <div class="live-pill"><div class="live-dot"></div>LIVE</div>
-        <div class="mono-muted" style="font-size:10px;">GO9 · IOX-AUX</div>
+        <div id="fiq-hright">
+          <div id="fiq-clock"></div>
+          <div id="fiq-date"></div>
+          <div id="fiq-user"></div>
+        </div>
       </div>
-      <div class="topbar-right">
-        <div>
-          <div class="ctrl-label">GROUP FILTER</div>
-          <select id="groupFilter"><option value="">All Groups</option></select>
-        </div>
-        <div>
-          <div class="ctrl-label">SHIFT ANCHOR</div>
-          <select id="shiftStart">
-            <option value="12">Rolling 12 Hrs</option>
-            <option value="5">05:00 AM · Day</option>
-            <option value="15">03:00 PM · Night</option>
-          </select>
-        </div>
-        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
-          <button class="refresh-btn" id="refreshBtn">↻ REFRESH</button>
-          <div class="last-refresh" id="lastRefresh">Not yet refreshed</div>
+      <div id="fiq-kpirow">
+        <div id="fiq-kpispc"></div>
+        <div class="fiq-kpi"><div class="fiq-kl">ACTIVE UNITS</div><div class="fiq-kv" id="fiq-k-active" style="color:#fff">—</div></div>
+        <div class="fiq-kpi"><div class="fiq-kl">SHIFT MOVES</div><div class="fiq-kv" id="fiq-k-moves" style="color:#fff">—</div></div>
+        <div class="fiq-kpi"><div class="fiq-kl">TRAILER MI</div><div class="fiq-kv" id="fiq-k-tmi" style="color:#1B7A1B">—</div></div>
+        <div class="fiq-kpi"><div class="fiq-kl">BOBTAIL MI</div><div class="fiq-kv" id="fiq-k-bmi" style="color:#6B21A8">—</div></div>
+        <div class="fiq-kpi"><div class="fiq-kl">FLEET UTIL</div><div class="fiq-kv" id="fiq-k-util" style="color:#fff">—</div></div>
+        <div id="fiq-livebadge">
+          <span class="fiq-dot"><span class="fiq-dotr" style="background:#22c55e"></span><span class="fiq-dotc" style="background:#22c55e"></span></span>
+          <div><div style="font-size:9px;color:#22c55e;letter-spacing:.12em;font-weight:bold">LIVE</div><div style="font-size:7px;color:#666;margin-top:1px">GO9 · IOX-AUX</div></div>
         </div>
       </div>
+      <div id="fiq-redrule"></div>
     </div>
 
-    <!-- KPI Strip -->
-    <div class="kpi-strip">
-      <div class="kpi" id="k0"><div class="kpi-label">ACTIVE UNITS</div><div class="kpi-value" id="kv0">—</div><div class="kpi-sub">Online in range</div></div>
-      <div class="kpi" id="k1"><div class="kpi-label">SHIFT MOVES</div><div class="kpi-value" id="kv1">—</div><div class="kpi-sub">Verified trailer moves</div></div>
-      <div class="kpi" id="k2"><div class="kpi-label">TRAILER MI</div><div class="kpi-value" id="kv2">—</div><div class="kpi-sub">Loaded miles today</div></div>
-      <div class="kpi" id="k3"><div class="kpi-label">BOBTAIL MI</div><div class="kpi-value" id="kv3">—</div><div class="kpi-sub">Empty miles today</div></div>
-      <div class="kpi" id="k4"><div class="kpi-label">FLEET UTIL</div><div class="kpi-value" id="kv4">—</div><div class="kpi-sub">% units moving now</div></div>
+    <!-- FILTER BAR -->
+    <div id="fiq-filter">
+      <label class="fiq-filterlbl">GROUP FILTER</label>
+      <select id="fiq-grpsel"></select>
+      <label class="fiq-filterlbl" style="margin-left:10px">SHIFT START</label>
+      <select id="fiq-shiftsel">
+        <option value="rolling12">Rolling 12 Hours</option>
+        <option value="0">12:00 AM</option>
+        <option value="1">1:00 AM</option>
+        <option value="2">2:00 AM</option>
+        <option value="3">3:00 AM</option>
+        <option value="4">4:00 AM</option>
+        <option value="5" selected>5:00 AM</option>
+        <option value="6">6:00 AM</option>
+        <option value="7">7:00 AM</option>
+        <option value="8">8:00 AM</option>
+        <option value="9">9:00 AM</option>
+        <option value="10">10:00 AM</option>
+        <option value="11">11:00 AM</option>
+        <option value="12">12:00 PM</option>
+        <option value="13">1:00 PM</option>
+        <option value="14">2:00 PM</option>
+        <option value="15">3:00 PM</option>
+        <option value="16">4:00 PM</option>
+        <option value="17">5:00 PM</option>
+        <option value="18">6:00 PM</option>
+        <option value="19">7:00 PM</option>
+        <option value="20">8:00 PM</option>
+        <option value="21">9:00 PM</option>
+        <option value="22">10:00 PM</option>
+        <option value="23">11:00 PM</option>
+      </select>
+      <button id="fiq-refbtn">↻ REFRESH</button>
+      <span id="fiq-upd">Not yet refreshed</span>
     </div>
 
-    <!-- State Tile Row -->
-    <div class="state-grid">
-      <div class="state-tile" data-filter="trailer-move">
-        <div class="tile-dot green"></div>
-        <div class="tile-info">
-          <div class="tile-count" id="sc0">0</div>
-          <div class="tile-name">Trailer Move</div>
-        </div>
-      </div>
-      <div class="state-tile" data-filter="trailer-idle">
-        <div class="tile-dot amber"></div>
-        <div class="tile-info">
-          <div class="tile-count" id="sc1">0</div>
-          <div class="tile-name">Trailer Idle</div>
-        </div>
-      </div>
-      <div class="state-tile" data-filter="bobtail-move">
-        <div class="tile-dot purple"></div>
-        <div class="tile-info">
-          <div class="tile-count" id="sc2">0</div>
-          <div class="tile-name">Bobtail Move</div>
-        </div>
-      </div>
-      <div class="state-tile" data-filter="bobtail-idle">
-        <div class="tile-dot red"></div>
-        <div class="tile-info">
-          <div class="tile-count" id="sc3">0</div>
-          <div class="tile-name">Bobtail Idle</div>
-        </div>
-      </div>
-      <div class="state-tile" data-filter="no-iox">
-        <div class="tile-dot blue"></div>
-        <div class="tile-info">
-          <div class="tile-count" id="sc4">0</div>
-          <div class="tile-name">Moving (No IOX)</div>
-        </div>
-      </div>
-      <div class="state-tile" data-filter="parked">
-        <div class="tile-dot muted"></div>
-        <div class="tile-info">
-          <div class="tile-count" id="sc5">0</div>
-          <div class="tile-name">Parked / Off</div>
-        </div>
-      </div>
+    <!-- STATE STRIP -->
+    <div id="fiq-strip">
+      <div id="fiq-sc-tm"><span class="fiq-dot"><span class="fiq-dotr" style="background:#1B7A1B"></span><span class="fiq-dotc" style="background:#1B7A1B"></span></span><div><div class="fiq-sclbl">Trailer Move</div><div class="fiq-sccnt" style="color:#1B7A1B"><span id="fiq-n-tm">0</span><span class="fiq-scu"> units</span></div></div></div>
+      <div id="fiq-sc-ti"><span class="fiq-dot"><span class="fiq-dotr" style="background:#B87800"></span><span class="fiq-dotc" style="background:#B87800"></span></span><div><div class="fiq-sclbl">Trailer Idling</div><div class="fiq-sccnt" style="color:#B87800"><span id="fiq-n-ti">0</span><span class="fiq-scu"> units</span></div></div></div>
+      <div id="fiq-sc-bm"><span class="fiq-dot"><span class="fiq-dotr" style="background:#6B21A8"></span><span class="fiq-dotc" style="background:#6B21A8"></span></span><div><div class="fiq-sclbl">Bobtail Move</div><div class="fiq-sccnt" style="color:#6B21A8"><span id="fiq-n-bm">0</span><span class="fiq-scu"> units</span></div></div></div>
+      <div id="fiq-sc-bi"><span class="fiq-dot"><span class="fiq-dotr" style="background:#CC0000"></span><span class="fiq-dotc" style="background:#CC0000"></span></span><div><div class="fiq-sclbl">Bobtail Idling</div><div class="fiq-sccnt" style="color:#CC0000"><span id="fiq-n-bi">0</span><span class="fiq-scu"> units</span></div></div></div>
+      <div id="fiq-sc-mv"><span class="fiq-dot"><span class="fiq-dotr" style="background:#3B5BDB"></span><span class="fiq-dotc" style="background:#3B5BDB"></span></span><div><div class="fiq-sclbl">Moving (No IOX)</div><div class="fiq-sccnt" style="color:#3B5BDB"><span id="fiq-n-mv">0</span><span class="fiq-scu"> units</span></div></div></div>
+      <div id="fiq-sc-pk"><span style="position:relative;display:inline-block;width:9px;height:9px"><span style="position:absolute;inset:2px;border-radius:50%;background:#999"></span></span><div><div class="fiq-sclbl">Parked / Off</div><div class="fiq-sccnt" style="color:#999"><span id="fiq-n-pk">0</span><span class="fiq-scu"> units</span></div></div></div>
     </div>
 
-    <!-- Content Area -->
-    <div class="content-area">
+    <!-- TABS -->
+    <div id="fiq-tabs">
+      <button id="fiq-tab-live"  class="fiq-tab">⬤ LIVE FLOOR</button>
+      <button id="fiq-tab-stats" class="fiq-tab">◈ UNIT STATS</button>
+      <button id="fiq-tab-rank"  class="fiq-tab">↑↓ UNIT RANK</button>
+    </div>
 
-      <!-- Left: Tabs -->
-      <div class="left-panel">
-        <div class="tab-bar">
-          <button class="tab-btn active" data-tab="live">⬤ LIVE FLOOR</button>
-          <button class="tab-btn" data-tab="stats">◈ UNIT STATS</button>
-          <button class="tab-btn" data-tab="rank">↑↓ UNIT RANK</button>
-        </div>
+    <!-- TAB CONTENT -->
+    <div id="fiq-content">
 
-        <!-- Tab: Live Floor -->
-        <div class="tab-content active" id="tab-live" style="overflow:auto;">
-          <table class="fleet-table">
-            <thead>
-              <tr>
-                <th>UNIT</th>
-                <th>STATE</th>
-                <th>MOVES</th>
-                <th>SPEED</th>
-                <th>SENSOR</th>
-                <th>LAST SEEN</th>
-              </tr>
-            </thead>
-            <tbody id="liveBody"></tbody>
-          </table>
-        </div>
-
-        <!-- Tab: Unit Stats -->
-        <div class="tab-content" id="tab-stats" style="overflow:auto;">
-          <table class="fleet-table">
-            <thead>
-              <tr>
-                <th>UNIT</th>
-                <th>MOVES</th>
-                <th>FUEL / DEF</th>
-                <th>ENG HRS</th>
-                <th>TRAILER MI</th>
-                <th>BOBTAIL MI</th>
-              </tr>
-            </thead>
-            <tbody id="statsBody"></tbody>
-          </table>
-        </div>
-
-        <!-- Tab: Unit Rank -->
-        <div class="tab-content" id="tab-rank" style="overflow:auto;">
-          <table class="rank-table">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>UNIT</th>
-                <th>MOVES (SHIFT)</th>
-                <th>MOVE BAR</th>
-                <th>STATE</th>
-              </tr>
-            </thead>
-            <tbody id="rankBody"></tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- Right: Alerts + Key -->
-      <div class="right-panel">
-        <div class="panel-block" style="flex:0 0 auto;">
-          <div class="panel-head">ALERTS</div>
-          <div class="alert-list" id="alertList">
-            <div class="alert-none">NO ACTIVE ALERTS</div>
-          </div>
-        </div>
-        <div class="panel-block" style="flex:1;overflow:auto;">
-          <div class="panel-head">SIGNAL KEY</div>
-          <div class="sig-list">
-            <div class="sig-item">
-              <div class="sig-dot" style="background:#1B7A1B;"></div>
-              <div class="sig-text">
-                <div class="sig-title" style="color:#1B7A1B;">IOX AUX1 HIGH + Moving</div>
-                <div class="sig-desc">Fifth wheel latched, in transit</div>
-              </div>
-            </div>
-            <div class="sig-item">
-              <div class="sig-dot" style="background:#B87800;"></div>
-              <div class="sig-text">
-                <div class="sig-title" style="color:#B87800;">IOX AUX1 HIGH + Stopped</div>
-                <div class="sig-desc">Hooked, at dock / waiting</div>
-              </div>
-            </div>
-            <div class="sig-item">
-              <div class="sig-dot" style="background:#6B21A8;"></div>
-              <div class="sig-text">
-                <div class="sig-title" style="color:#6B21A8;">IOX AUX1 LOW + Moving</div>
-                <div class="sig-desc">Repositioning without trailer</div>
-              </div>
-            </div>
-            <div class="sig-item">
-              <div class="sig-dot" style="background:#CC0000;"></div>
-              <div class="sig-text">
-                <div class="sig-title" style="color:#CC0000;">IOX AUX1 LOW + Stopped</div>
-                <div class="sig-desc">Idle bobtail — fuel waste</div>
-              </div>
-            </div>
-            <div class="sig-item">
-              <div class="sig-dot" style="background:#3B5BDB;"></div>
-              <div class="sig-text">
-                <div class="sig-title" style="color:#3B5BDB;">Moving (No IOX-AUX)</div>
-                <div class="sig-desc">GO9 speed only</div>
-              </div>
-            </div>
-            <div class="sig-item">
-              <div class="sig-dot" style="background:#999;"></div>
-              <div class="sig-text">
-                <div class="sig-title" style="color:#777;">Parked / Engine Off</div>
-                <div class="sig-desc">GO9 still reports fuel &amp; DEF</div>
-              </div>
+      <!-- LIVE FLOOR -->
+      <div id="fiq-p-live">
+        <div id="fiq-live-layout">
+          <div id="fiq-cards"></div>
+          <div id="fiq-sidebar">
+            <div class="fiq-pc"><div class="fiq-rr"></div><div class="fiq-ph">FLEET STATE NOW</div><div id="fiq-sbars"></div></div>
+            <div class="fiq-pc"><div class="fiq-rr"></div><div class="fiq-ph">ALERTS</div><div id="fiq-alerts"><div class="fiq-empty">No active alerts</div></div></div>
+            <div class="fiq-pc"><div class="fiq-rr"></div><div class="fiq-ph">SIGNAL KEY</div>
+              <div class="fiq-krow"><div class="fiq-kbar" style="background:#1B7A1B"></div><div><div style="font-size:9px;font-weight:bold;color:#1B7A1B">Fifth Wheel Latched + Moving</div><div style="font-size:8px;color:#888;margin-top:1px">Trailer in transit</div></div></div>
+              <div class="fiq-krow"><div class="fiq-kbar" style="background:#B87800"></div><div><div style="font-size:9px;font-weight:bold;color:#B87800">Fifth Wheel Latched + Stopped</div><div style="font-size:8px;color:#888;margin-top:1px">Hooked, at dock / waiting</div></div></div>
+              <div class="fiq-krow"><div class="fiq-kbar" style="background:#6B21A8"></div><div><div style="font-size:9px;font-weight:bold;color:#6B21A8">Fifth Wheel Open + Moving</div><div style="font-size:8px;color:#888;margin-top:1px">Repositioning without trailer</div></div></div>
+              <div class="fiq-krow"><div class="fiq-kbar" style="background:#CC0000"></div><div><div style="font-size:9px;font-weight:bold;color:#CC0000">Fifth Wheel Open + Stopped</div><div style="font-size:8px;color:#888;margin-top:1px">Bobtail idling — fuel waste</div></div></div>
+              <div class="fiq-krow"><div class="fiq-kbar" style="background:#3B5BDB;height:30px"></div><div><div style="font-size:9px;font-weight:bold;color:#3B5BDB">Moving (No IOX-AUX)</div><div style="font-size:8px;color:#888;margin-top:1px">GO9 speed only — no 5th wheel data</div></div></div>
+              <div class="fiq-krow"><div class="fiq-kbar" style="background:#999;height:24px"></div><div><div style="font-size:9px;font-weight:bold;color:#777">Parked / Engine Off</div><div style="font-size:8px;color:#888;margin-top:1px">GO9 still reports fuel &amp; DEF</div></div></div>
             </div>
           </div>
         </div>
       </div>
-    </div><!-- /content-area -->
 
-    <!-- Footer -->
-    <div class="footer">
-      <div class="footer-left">FleetSource Leasing · 2382 Route 130, Dayton, NJ 08810</div>
-      <div class="footer-right">
-        <span style="font-weight:700;color:#888;letter-spacing:.14em;">SPOTTER</span><span style="font-weight:700;color:#CC0000;letter-spacing:.1em;"> IQ</span><span style="color:#888;"> · A FLEETSOURCE IQ PRODUCT · GO9 · IOX-AUX optional · v2.0.0</span>
-      </div>
+      <!-- UNIT STATS -->
+      <div id="fiq-p-stats" style="display:none"><div id="fiq-stats-list"></div></div>
+
+      <!-- UNIT RANK -->
+      <div id="fiq-p-rank" style="display:none"><div id="fiq-rank-grid"></div><div id="fiq-rank-pk"></div></div>
+
+    </div><!-- /fiq-content -->
+
+    <div id="fiq-footer">
+      <span>FleetSource Leasing · 2382 Route 130, Dayton, NJ 08810</span>
+      <div><span style="font-size:9px;font-weight:bold;color:#888;letter-spacing:.14em">FLEETSOURCE</span><span style="font-size:11px;font-weight:bold;color:#CC0000;letter-spacing:.1em"> IQ</span><span style="color:#888;margin-left:3px">· Spotter IQ · GO9 · IOX-AUX optional · ProPlus · v1.6.0</span></div>
     </div>
 
-  </div><!-- /app -->
-
-  <!-- ════════════════════════════════════════════════════
-       MYGEOTAB ADD-IN LOGIC
-       Handshake: geotab.addin.spotterIQ
-  ════════════════════════════════════════════════════ -->
-  <script>
-  /* ── Local Dev Stub ─────────────────────────────────────────────
-     When opened directly in a browser (not inside MyGeotab),
-     the `geotab` host object doesn't exist. This stub creates a
-     realistic mock so the dashboard renders for design/QA review.
-     It is completely inert inside MyGeotab — the real `geotab`
-     object is already present before this script runs.
-  ────────────────────────────────────────────────────────────────*/
-  if (typeof geotab === 'undefined') {
-    console.log('[SpotterIQ] Running in LOCAL DEV mode — using mock data.');
-
-    // Helpers to build realistic StatusData time-series
-    function makeNow() { return new Date().toISOString(); }
-    function minsAgo(m) { return new Date(Date.now() - m * 60000).toISOString(); }
-    function series(diagId, deviceId, points) {
-      return points.map(function (p) {
-        return { diagnostic: { id: diagId }, device: { id: deviceId },
-                 dateTime: p[0], data: p[1] };
-      });
-    }
-
-    // Mock devices — mirrors what api.call('Get', {typeName:'Device'}) returns
-    var MOCK_DEVICES = [
-      { id: 'b1', name: 'TICO-01', lastConnectedDate: minsAgo(2)  },
-      { id: 'b2', name: 'TICO-02', lastConnectedDate: minsAgo(5)  },
-      { id: 'b3', name: 'TICO-03', lastConnectedDate: minsAgo(8)  },
-      { id: 'b4', name: 'TICO-04', lastConnectedDate: minsAgo(15) },
-      { id: 'b5', name: 'TICO-05', lastConnectedDate: minsAgo(30) },
-      { id: 'b6', name: 'TICO-06', lastConnectedDate: minsAgo(60) },
-      { id: 'b7', name: 'TICO-07', lastConnectedDate: new Date(Date.now() - 9 * 86400000).toISOString() } // OFFLINE
-    ];
-
-    // Mock StatusData per device per diagnostic (KPH, ratios, seconds as Geotab native)
-    // Layout must match DIAG_KEYS order: jaw, speed, ignition, fuel, def, engHours, odo
-    var MOCK_STATUS = {
-      'b1': [
-        // jaw — locked + unlocked cycles (3 completed moves)
-        series('DiagnosticAuxiliary1Id', 'b1', [
-          [minsAgo(90),0],[minsAgo(80),1],[minsAgo(70),0],
-          [minsAgo(60),1],[minsAgo(50),0],[minsAgo(30),1],[minsAgo(5),1]
-        ]),
-        // speed — KPH (2 mph = ~3.2 kph)
-        series('DiagnosticSpeedId', 'b1', [
-          [minsAgo(85),18],[minsAgo(75),22],[minsAgo(65),20],
-          [minsAgo(55),16],[minsAgo(45),0],[minsAgo(35),19],[minsAgo(3),21]
-        ]),
-        // ignition
-        series('DiagnosticIgnitionId', 'b1', [
-          [minsAgo(120),1],[makeNow(),1]
-        ]),
-        // fuel (ratio 0–1)
-        series('DiagnosticFuelLevelId',   'b1', [[minsAgo(10), 0.72]]),
-        // DEF
-        series('DiagnosticAdBlueLevelId', 'b1', [[minsAgo(10), 0.58]]),
-        // engine hours (seconds)
-        series('DiagnosticEngineHoursId', 'b1', [[minsAgo(10), 18540]]),
-        // odometer (meters)
-        series('DiagnosticOdometerAdjustmentId', 'b1', [
-          [minsAgo(90),412000],[minsAgo(60),413800],[minsAgo(30),415200],[minsAgo(5),416400]
-        ])
-      ],
-      'b2': [
-        series('DiagnosticAuxiliary1Id', 'b2', [
-          [minsAgo(60),0],[minsAgo(50),1],[minsAgo(40),0],[minsAgo(20),1],[minsAgo(2),1]
-        ]),
-        series('DiagnosticSpeedId', 'b2', [
-          [minsAgo(55),14],[minsAgo(45),0],[minsAgo(25),17],[minsAgo(1),0]
-        ]),
-        series('DiagnosticIgnitionId',        'b2', [[minsAgo(70),1],[makeNow(),1]]),
-        series('DiagnosticFuelLevelId',       'b2', [[minsAgo(5), 0.45]]),
-        series('DiagnosticAdBlueLevelId',     'b2', [[minsAgo(5), 0.30]]),
-        series('DiagnosticEngineHoursId',     'b2', [[minsAgo(5), 9200]]),
-        series('DiagnosticOdometerAdjustmentId','b2',[[minsAgo(60),200000],[minsAgo(5),201200]])
-      ],
-      'b3': [
-        // bobtail move — jaw unlocked, speed > 2 mph
-        series('DiagnosticAuxiliary1Id', 'b3', [[minsAgo(30),0],[makeNow(),0]]),
-        series('DiagnosticSpeedId',      'b3', [[minsAgo(10),24],[makeNow(),19]]),
-        series('DiagnosticIgnitionId',   'b3', [[minsAgo(40),1],[makeNow(),1]]),
-        series('DiagnosticFuelLevelId',       'b3', [[minsAgo(5), 0.88]]),
-        series('DiagnosticAdBlueLevelId',     'b3', [[minsAgo(5), 0.91]]),
-        series('DiagnosticEngineHoursId',     'b3', [[minsAgo(5), 5100]]),
-        series('DiagnosticOdometerAdjustmentId','b3',[[minsAgo(30),95000],[minsAgo(5),95600]])
-      ],
-      'b4': [
-        // sensor alert scenario — jaw always 0, fast >10mph 6 times, ignition >2hrs
-        series('DiagnosticAuxiliary1Id', 'b4', [[minsAgo(130),0],[makeNow(),0]]),
-        series('DiagnosticSpeedId', 'b4', [
-          [minsAgo(120),20],[minsAgo(100),22],[minsAgo(80),18],
-          [minsAgo(60),24],[minsAgo(40),19],[minsAgo(20),21],[makeNow(),0]
-        ]),
-        series('DiagnosticIgnitionId',   'b4', [[minsAgo(140),1],[makeNow(),1]]),
-        series('DiagnosticFuelLevelId',       'b4', [[minsAgo(5), 0.19]]),
-        series('DiagnosticAdBlueLevelId',     'b4', [[minsAgo(5), 0.08]]),
-        series('DiagnosticEngineHoursId',     'b4', [[minsAgo(5), 32400]]),
-        series('DiagnosticOdometerAdjustmentId','b4',[[minsAgo(130),300000],[minsAgo(5),302800]])
-      ],
-      'b5': [
-        // idle — jaw locked, stopped
-        series('DiagnosticAuxiliary1Id', 'b5', [[minsAgo(45),1],[makeNow(),1]]),
-        series('DiagnosticSpeedId',      'b5', [[minsAgo(45),0],[makeNow(),0]]),
-        series('DiagnosticIgnitionId',   'b5', [[minsAgo(50),1],[makeNow(),1]]),
-        series('DiagnosticFuelLevelId',       'b5', [[minsAgo(5), 0.63]]),
-        series('DiagnosticAdBlueLevelId',     'b5', [[minsAgo(5), 0.77]]),
-        series('DiagnosticEngineHoursId',     'b5', [[minsAgo(5), 14400]]),
-        series('DiagnosticOdometerAdjustmentId','b5',[[minsAgo(45),500000],[minsAgo(5),500000]])
-      ],
-      'b6': [
-        // no IOX — no jaw data, just speed
-        series('DiagnosticAuxiliary1Id', 'b6', []),
-        series('DiagnosticSpeedId',      'b6', [[minsAgo(10),16],[makeNow(),12]]),
-        series('DiagnosticIgnitionId',   'b6', [[minsAgo(30),1],[makeNow(),1]]),
-        series('DiagnosticFuelLevelId',       'b6', [[minsAgo(5), 0.50]]),
-        series('DiagnosticAdBlueLevelId',     'b6', [[minsAgo(5), 0.44]]),
-        series('DiagnosticEngineHoursId',     'b6', [[minsAgo(5), 7200]]),
-        series('DiagnosticOdometerAdjustmentId','b6',[[minsAgo(30),150000],[minsAgo(5),150900]])
-      ],
-      'b7': [ [], [], [], [], [], [], [] ] // OFFLINE — no data fetched
-    };
-
-    // Mock api object — mirrors the real Geotab JS API surface
-    var mockApi = {
-      call: function (method, params) {
-        return new Promise(function (resolve) {
-          setTimeout(function () {
-            if (method === 'Get' && params.typeName === 'Device') {
-              resolve(MOCK_DEVICES);
-            } else {
-              resolve([]);
-            }
-          }, 400);
-        });
-      },
-      multiCall: function (calls) {
-        return new Promise(function (resolve) {
-          setTimeout(function () {
-            var results = calls.map(function (call) {
-              var search = call[1].search;
-              var devId  = search.deviceSearch.id;
-              var diagId = search.diagnosticSearch.id;
-              var diagOrder = [
-                'DiagnosticAuxiliary1Id',
-                'DiagnosticSpeedId',
-                'DiagnosticIgnitionId',
-                'DiagnosticFuelLevelId',
-                'DiagnosticAdBlueLevelId',
-                'DiagnosticEngineHoursId',
-                'DiagnosticOdometerAdjustmentId'
-              ];
-              var idx = diagOrder.indexOf(diagId);
-              return (MOCK_STATUS[devId] && idx >= 0) ? MOCK_STATUS[devId][idx] : [];
-            });
-            resolve(results);
-          }, 600);
-        });
-      }
-    };
-
-    // Minimal geotab stub — registers addins and auto-initializes them
-    window.geotab = {
-      addin: {},
-      _boot: function () {
-        var name = Object.keys(window.geotab.addin)[0];
-        if (!name) return;
-        var factory = window.geotab.addin[name];
-        var instance = factory(mockApi, {});
-        instance.initialize(mockApi, {}, function () {
-          console.log('[SpotterIQ] Mock initialize() complete.');
-        });
-      }
-    };
-
-    // Boot after all scripts have run
-    window.addEventListener('load', function () {
-      window.geotab._boot();
-    });
-  }
-  /* ── End Local Dev Stub ──────────────────────────────────────── */
-
-  /* global geotab */
-  geotab.addin.spotterIQ = function (api, state) {
-
-    // ── Diagnostic IDs ─────────────────────────────────────────
-    var DIAG_JAW      = 'DiagnosticAuxiliary1Id';
-    var DIAG_SPEED    = 'DiagnosticSpeedId';
-    var DIAG_IGNITION = 'DiagnosticIgnitionId';
-    var DIAG_FUEL     = 'DiagnosticFuelLevelId';
-    var DIAG_DEF      = 'DiagnosticAdBlueLevelId';
-    var DIAG_ENG_HRS  = 'DiagnosticEngineHoursId';
-    var DIAG_ODO      = 'DiagnosticOdometerAdjustmentId';
-
-    var DIAG_KEYS = ['jaw','speed','ignition','fuel','def','engHours','odo'];
-    var DIAG_MAP  = {
-      jaw:      DIAG_JAW,
-      speed:    DIAG_SPEED,
-      ignition: DIAG_IGNITION,
-      fuel:     DIAG_FUEL,
-      def:      DIAG_DEF,
-      engHours: DIAG_ENG_HRS,
-      odo:      DIAG_ODO
-    };
-
-    // ── Unit Conversions ──────────────────────────────────────
-    var CONV = {
-      kphToMph:   function (v) { return v * 0.621371; },
-      secToHours: function (v) { return (v / 3600).toFixed(1); },
-      mToMiles:   function (v) { return (v * 0.000621371).toFixed(1); },
-      ratioToPct: function (v) { return Math.round(v * 100); }
-    };
-
-    // ── Thresholds ────────────────────────────────────────────
-    var MOVE_MPH          = 2;    // min speed for a valid move
-    var ALERT_IGN_HOURS   = 2;    // ignition-on duration to trigger sensor check
-    var ALERT_FAST_MPH    = 10;   // "meaningful motion" speed threshold
-    var ALERT_FAST_COUNT  = 5;    // exceedances needed
-    var OFFLINE_DAYS      = 7;    // GO9 heartbeat tolerance
-
-    // ── State ─────────────────────────────────────────────────
-    var _api      = null;
-    var _assetData = [];
-
-    // ════════════════════════════════════════════════════════
-    //  Internal namespace — defined BEFORE return so it is
-    //  in scope when initialize() calls IQ.refresh()
-    // ════════════════════════════════════════════════════════
-    var IQ = {
-
-      // ── Shift date ────────────────────────────────────────
-      fromDate: function () {
-        var opt = document.getElementById('shiftStart').value;
-        var now = new Date();
-        var d   = new Date(now);
-        if (opt === '12') {
-          d.setHours(d.getHours() - 12);
-        } else {
-          d.setHours(parseInt(opt, 10), 0, 0, 0);
-          if (d > now) d.setDate(d.getDate() - 1);
-        }
-        return d.toISOString();
-      },
-
-      // ── Orchestrator ──────────────────────────────────────
-      refresh: function () {
-        IQ.showConnecting();
-        var from = IQ.fromDate();
-        var to   = new Date().toISOString();
-
-        _api.call('Get', { typeName: 'Device' })
-          .then(function (devices) {
-            var offline = [], active = [];
-            devices.forEach(function (d) {
-              var days = (Date.now() - new Date(d.lastConnectedDate)) / 86400000;
-              (days > OFFLINE_DAYS ? offline : active).push(d);
-            });
-
-            // ── Build flat multiCall array ─────────────────
-            // For N active devices × K diagnostics, result[i*K + j]
-            // is the StatusData array for device[i], diag[j].
-            var calls = [];
-            active.forEach(function (dev) {
-              DIAG_KEYS.forEach(function (key) {
-                calls.push([
-                  'Get',
-                  {
-                    typeName: 'StatusData',
-                    search: {
-                      deviceSearch:     { id: dev.id },
-                      diagnosticSearch: { id: DIAG_MAP[key] },
-                      fromDate: from,
-                      toDate:   to
-                    }
-                  }
-                ]);
-              });
-            });
-
-            var step = DIAG_KEYS.length;
-
-            // multiCall or empty resolve
-            var p = calls.length
-              ? _api.multiCall(calls)
-              : Promise.resolve([]);
-
-            return p.then(function (allResults) {
-              _assetData = [];
-
-              active.forEach(function (dev, i) {
-                var slice = allResults.slice(i * step, i * step + step);
-                var data = {};
-                DIAG_KEYS.forEach(function (key, j) {
-                  data[key] = (slice[j] || []).sort(function (a, b) {
-                    return new Date(a.dateTime) - new Date(b.dateTime);
-                  });
-                });
-                _assetData.push(IQ.buildAsset(dev, data));
-              });
-
-              offline.forEach(function (dev) {
-                _assetData.push({
-                  name:     dev.name,
-                  state:    'OFFLINE',
-                  stateKey: 'parked',
-                  moves:    0,
-                  speedMph: 0,
-                  fuel:     null, def: null,
-                  engHrs:   null,
-                  trailerMi:0, bobtailMi: 0,
-                  lastSeen: new Date(dev.lastConnectedDate),
-                  hasIOX:   false,
-                  sensorOk: true,
-                  offline:  true,
-                  alert:    null
-                });
-              });
-
-              IQ.render();
-            });
-          })
-          .catch(function (err) {
-            console.error('[SpotterIQ]', err);
-            IQ.showError();
-          });
-      },
-
-      // ── Build asset object from raw data ──────────────────
-      buildAsset: function (dev, data) {
-        var last = function (arr) { return arr.length ? arr[arr.length - 1].data : 0; };
-
-        var lastJaw    = last(data.jaw);
-        var lastKph    = last(data.speed);
-        var lastMph    = CONV.kphToMph(lastKph);
-        var hasIOX     = data.jaw.length > 0;
-        var isLocked   = lastJaw === 1;
-        var isMoving   = lastMph > MOVE_MPH;
-
-        // State classification
-        var stateLabel, stateKey;
-        if (!hasIOX && isMoving)     { stateLabel = 'Moving (No IOX)'; stateKey = 'no-iox'; }
-        else if (isLocked && isMoving){ stateLabel = 'Trailer Move';   stateKey = 'trailer-move'; }
-        else if (isLocked)            { stateLabel = 'Trailer Idle';   stateKey = 'trailer-idle'; }
-        else if (isMoving)            { stateLabel = 'Bobtail Move';   stateKey = 'bobtail-move'; }
-        else                          { stateLabel = 'Bobtail Idle';   stateKey = 'bobtail-idle'; }
-
-        var moves      = IQ.countMoves(data.jaw, data.speed);
-        var sensorOk   = !IQ.checkAlert(data.jaw, data.speed, data.ignition);
-        var fuelPct    = data.fuel.length   ? CONV.ratioToPct(last(data.fuel))   : null;
-        var defPct     = data.def.length    ? CONV.ratioToPct(last(data.def))    : null;
-        var engHrs     = data.engHours.length ? CONV.secToHours(last(data.engHours)) : null;
-
-        // Mileage split from odometer series
-        var miles = IQ.splitMileage(data.jaw, data.odo, data.speed);
-
-        return {
-          name:      dev.name,
-          state:     stateLabel,
-          stateKey:  stateKey,
-          moves:     moves,
-          speedMph:  lastMph,
-          fuel:      fuelPct,
-          def:       defPct,
-          engHrs:    engHrs,
-          trailerMi: miles.trailer,
-          bobtailMi: miles.bobtail,
-          lastSeen:  new Date(dev.lastConnectedDate),
-          hasIOX:    hasIOX,
-          sensorOk:  sensorOk,
-          offline:   false,
-          alert:     sensorOk ? null : '⚠ Check Jaw Sensor'
-        };
-      },
-
-      // ── Move correlation: two-pointer O(n+m) ──────────────
-      // Count rising edges of jaw lock (0→1) while nearest speed
-      // sample (within ±60s) exceeds MOVE_MPH.
-      countMoves: function (jawSeries, speedSeries) {
-        if (!jawSeries.length || !speedSeries.length) return 0;
-        var moves  = 0, inMove = false, sPtr = 0;
-        var GAP_MS = 60000;
-
-        for (var i = 0; i < jawSeries.length; i++) {
-          var tJaw = new Date(jawSeries[i].dateTime).getTime();
-
-          // Advance pointer to the closest speed sample
-          while (sPtr < speedSeries.length - 1) {
-            var currDist = Math.abs(new Date(speedSeries[sPtr].dateTime).getTime() - tJaw);
-            var nextDist = Math.abs(new Date(speedSeries[sPtr + 1].dateTime).getTime() - tJaw);
-            if (nextDist <= currDist) { sPtr++; } else { break; }
-          }
-
-          var tSpeed = new Date(speedSeries[sPtr].dateTime).getTime();
-          var gap    = Math.abs(tSpeed - tJaw);
-          var mph    = gap <= GAP_MS ? CONV.kphToMph(speedSeries[sPtr].data) : 0;
-
-          var locked  = jawSeries[i].data === 1;
-          var fast    = mph > MOVE_MPH;
-
-          if (locked && fast && !inMove)              { inMove = true; }
-          else if ((!locked || !fast) && inMove)      { moves++; inMove = false; }
-        }
-        if (inMove) moves++; // move still active at window end
-        return moves;
-      },
-
-      // ── Mileage split by jaw state ────────────────────────
-      splitMileage: function (jawSeries, odoSeries, speedSeries) {
-        if (!odoSeries.length || !speedSeries.length) return { trailer: 0, bobtail: 0 };
-        var trailerM = 0, bobtailM = 0;
-        var jawPtr = 0;
-
-        for (var i = 1; i < odoSeries.length; i++) {
-          var t   = new Date(odoSeries[i].dateTime).getTime();
-          var seg = odoSeries[i].data - odoSeries[i - 1].data;
-          if (seg <= 0) continue;
-
-          // advance jaw pointer to the point nearest to this timestamp
-          while (jawPtr < jawSeries.length - 1) {
-            var d1 = Math.abs(new Date(jawSeries[jawPtr].dateTime).getTime() - t);
-            var d2 = Math.abs(new Date(jawSeries[jawPtr + 1].dateTime).getTime() - t);
-            if (d2 <= d1) { jawPtr++; } else { break; }
-          }
-
-          var isLocked = jawSeries.length ? (jawSeries[jawPtr].data === 1) : false;
-          if (isLocked) trailerM += seg;
-          else          bobtailM += seg;
-        }
-
-        return {
-          trailer: parseFloat(CONV.mToMiles(trailerM)),
-          bobtail: parseFloat(CONV.mToMiles(bobtailM))
-        };
-      },
-
-      // ── Sensor alert: all three conditions must hold ───────
-      checkAlert: function (jawSeries, speedSeries, ignSeries) {
-        if (!jawSeries.length) return false;
-        if (jawSeries.some(function (p) { return p.data === 1; })) return false;
-
-        var fastCount = speedSeries.filter(function (p) {
-          return CONV.kphToMph(p.data) > ALERT_FAST_MPH;
-        }).length;
-        if (fastCount < ALERT_FAST_COUNT) return false;
-
-        if (!ignSeries.length) return false;
-        var maxOnMs = 0, spanStart = null;
-        ignSeries.forEach(function (pt) {
-          if (pt.data === 1 && spanStart === null) {
-            spanStart = new Date(pt.dateTime).getTime();
-          } else if (pt.data === 0 && spanStart !== null) {
-            maxOnMs = Math.max(maxOnMs, new Date(pt.dateTime).getTime() - spanStart);
-            spanStart = null;
-          }
-        });
-        if (spanStart !== null) maxOnMs = Math.max(maxOnMs, Date.now() - spanStart);
-        if ((maxOnMs / 3600000) <= ALERT_IGN_HOURS) return false;
-
-        return true;
-      },
-
-      // ── Render ────────────────────────────────────────────
-      render: function () {
-        var data = _assetData;
-
-        // KPIs
-        var active     = data.filter(function (a) { return !a.offline; });
-        var totalMoves = active.reduce(function (s, a) { return s + a.moves; }, 0);
-        var movingNow  = active.filter(function (a) {
-          return a.stateKey === 'trailer-move' || a.stateKey === 'bobtail-move' || a.stateKey === 'no-iox';
-        }).length;
-        var totalTrMi  = active.reduce(function (s, a) { return s + a.trailerMi; }, 0).toFixed(1);
-        var totalBbMi  = active.reduce(function (s, a) { return s + a.bobtailMi; }, 0).toFixed(1);
-        var util       = active.length ? Math.round((movingNow / active.length) * 100) : 0;
-
-        ['kv0','kv1','kv2','kv3','kv4'].forEach(function (id, i) {
-          document.getElementById(id).textContent =
-            [active.length, totalMoves, totalTrMi, totalBbMi, util + '%'][i];
-          document.getElementById('k' + i).classList.add('loaded');
-        });
-
-        // State tile counts
-        var counts = { 'trailer-move':0,'trailer-idle':0,'bobtail-move':0,'bobtail-idle':0,'no-iox':0,'parked':0 };
-        data.forEach(function (a) {
-          if (a.offline) counts['parked']++;
-          else           counts[a.stateKey] = (counts[a.stateKey] || 0) + 1;
-        });
-        var sc = ['trailer-move','trailer-idle','bobtail-move','bobtail-idle','no-iox','parked'];
-        sc.forEach(function (key, i) {
-          document.getElementById('sc' + i).textContent = counts[key] || 0;
-        });
-
-        // Alerts
-        var alerts = data.filter(function (a) { return a.alert; });
-        var al = document.getElementById('alertList');
-        if (alerts.length === 0) {
-          al.innerHTML = '<div class="alert-none">NO ACTIVE ALERTS</div>';
-        } else {
-          al.innerHTML = alerts.map(function (a) {
-            return '<div class="alert-item">' +
-              '<div class="alert-unit">' + IQ.esc(a.name) + '</div>' +
-              '<div class="alert-msg">' + IQ.esc(a.alert) + '</div>' +
-            '</div>';
-          }).join('');
-        }
-
-        // Max moves for rank bar
-        var maxMoves = data.reduce(function (m, a) { return Math.max(m, a.moves); }, 1);
-
-        // Sort for rank
-        var ranked = data.slice().sort(function (a, b) { return b.moves - a.moves; });
-
-        // LIVE FLOOR
-        document.getElementById('liveBody').innerHTML = data.map(function (a) {
-          return IQ.liveRow(a);
-        }).join('');
-
-        // UNIT STATS
-        document.getElementById('statsBody').innerHTML = data.map(function (a) {
-          return IQ.statsRow(a);
-        }).join('');
-
-        // UNIT RANK
-        document.getElementById('rankBody').innerHTML = ranked.map(function (a, idx) {
-          return IQ.rankRow(a, idx + 1, maxMoves);
-        }).join('');
-
-        // Last refresh timestamp
-        document.getElementById('lastRefresh').textContent =
-          'Updated ' + new Date().toLocaleTimeString();
-
-        IQ.showApp();
-      },
-
-      // ── Row builders ─────────────────────────────────────
-      liveRow: function (a) {
-        var tagCls = { 'trailer-move':'tag-green','trailer-idle':'tag-amber',
-                       'bobtail-move':'tag-purple','bobtail-idle':'tag-red',
-                       'no-iox':'tag-blue','parked':'tag-muted','OFFLINE':'tag-red' };
-        var cls = a.offline ? 'tag-red' : (tagCls[a.stateKey] || 'tag-muted');
-        var movesHtml = a.offline ? '<span class="moves-zero">—</span>'
-          : (a.moves > 0
-              ? '<span class="moves-big">' + a.moves + '</span>'
-              : '<span class="moves-zero">0</span>');
-        return '<tr>' +
-          '<td><span class="unit-name">' + IQ.esc(a.name) + '</span></td>' +
-          '<td><span class="state-tag ' + cls + '">' + IQ.esc(a.state) + '</span></td>' +
-          '<td>' + movesHtml + '</td>' +
-          '<td><span class="mono-val">' + (a.offline ? '—' : a.speedMph.toFixed(1) + ' mph') + '</span></td>' +
-          '<td>' + (a.offline ? '<span class="mono-muted">—</span>' :
-            (a.hasIOX
-              ? (a.sensorOk
-                  ? '<span class="sensor-ok">✓ OK</span>'
-                  : '<span class="sensor-warn">⚠ CHECK SENSOR</span>')
-              : '<span class="mono-muted">NO IOX</span>')) + '</td>' +
-          '<td><span class="mono-muted">' + a.lastSeen.toLocaleTimeString() + '</span></td>' +
-        '</tr>';
-      },
-
-      statsRow: function (a) {
-        return '<tr>' +
-          '<td><span class="unit-name">' + IQ.esc(a.name) + '</span></td>' +
-          '<td>' + (a.moves > 0
-            ? '<span class="moves-big">' + a.moves + '</span>'
-            : '<span class="moves-zero">0</span>') + '</td>' +
-          '<td>' + IQ.fuelCell(a.fuel, a.def) + '</td>' +
-          '<td><span class="mono-val">' + (a.engHrs || '—') + (a.engHrs ? ' hrs' : '') + '</span></td>' +
-          '<td><span class="mono-val">' + (a.trailerMi || '—') + (a.trailerMi ? ' mi' : '') + '</span></td>' +
-          '<td><span class="mono-val">' + (a.bobtailMi || '—') + (a.bobtailMi ? ' mi' : '') + '</span></td>' +
-        '</tr>';
-      },
-
-      rankRow: function (a, rank, max) {
-        var pct = max > 0 ? Math.round((a.moves / max) * 100) : 0;
-        var tagCls = { 'trailer-move':'tag-green','trailer-idle':'tag-amber',
-                       'bobtail-move':'tag-purple','bobtail-idle':'tag-red',
-                       'no-iox':'tag-blue','parked':'tag-muted' };
-        var cls = a.offline ? 'tag-red' : (tagCls[a.stateKey] || 'tag-muted');
-        return '<tr>' +
-          '<td><span class="rank-num">#' + rank + '</span></td>' +
-          '<td><span class="unit-name">' + IQ.esc(a.name) + '</span></td>' +
-          '<td><span class="moves-big">' + a.moves + '</span></td>' +
-          '<td style="padding-right:20px;">' +
-            '<div style="display:flex;align-items:center;gap:8px;">' +
-              '<div class="rank-bar-track" style="flex:1;">' +
-                '<div class="rank-bar-fill" style="width:' + pct + '%"></div>' +
-              '</div>' +
-              '<span class="mono-muted">' + pct + '%</span>' +
-            '</div>' +
-          '</td>' +
-          '<td><span class="state-tag ' + cls + '">' + IQ.esc(a.state) + '</span></td>' +
-        '</tr>';
-      },
-
-      fuelCell: function (fuelPct, defPct) {
-        var bar = function (lbl, pct) {
-          if (pct === null) return '<div class="fuel-row"><span class="fuel-lbl">' + lbl + '</span><span class="mono-muted">—</span></div>';
-          var cls  = pct > 25 ? 'fill-ok' : pct > 10 ? 'fill-warn' : 'fill-crit';
-          var pcls = pct > 25 ? 'pct-ok'  : pct > 10 ? 'pct-warn'  : 'pct-crit';
-          return '<div class="fuel-row">' +
-            '<span class="fuel-lbl">' + lbl + '</span>' +
-            '<div class="fuel-track"><div class="fuel-fill ' + cls + '" style="width:' + pct + '%"></div></div>' +
-            '<span class="fuel-pct ' + pcls + '">' + pct + '%</span>' +
-          '</div>';
-        };
-        return '<div class="fuel-col">' + bar('FUEL', fuelPct) + bar('DEF', defPct) + '</div>';
-      },
-
-      // ── Overlay states ────────────────────────────────────
-      showConnecting: function () {
-        document.getElementById('ov-connecting').style.display = '';
-        document.getElementById('ovError').classList.remove('show');
-        document.getElementById('overlay').classList.remove('hidden');
-        document.getElementById('app').classList.remove('show');
-      },
-      showError: function () {
-        document.getElementById('ov-connecting').style.display = 'none';
-        document.getElementById('ovError').classList.add('show');
-      },
-      showApp: function () {
-        document.getElementById('overlay').classList.add('hidden');
-        document.getElementById('app').classList.add('show');
-      },
-
-      esc: function (s) {
-        return String(s || '')
-          .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-          .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-      }
-
-    }; // end IQ
-
-    // ════════════════════════════════════════════════════════
-    //  MyGeotab Add-in interface — returned to the host
-    // ════════════════════════════════════════════════════════
+  </div><!-- /fiq-app -->
+</div><!-- /fiq-root -->
+
+<script>
+"use strict";
+
+/* ══════════════════════════════════════════════════════════════
+   LAYOUT ENGINE
+   JS sets display/flex/grid directly on elements after every
+   render and on a 200ms interval for 3s post-app-show.
+   This beats any late-injected stylesheet overrides from the
+   MyGeotab host frame without needing a MutationObserver
+   (which interferes with Geotab API initialization).
+══════════════════════════════════════════════════════════════ */
+
+function injectVisualCSS() {
+  const id = 'fiq-vcss';
+  let s = document.getElementById(id);
+  if (!s) { s = document.createElement('style'); s.id = id; document.head.appendChild(s); }
+  s.textContent = `
+    body { margin:0;padding:0;background:#F0F2F5;font-family:Arial,sans-serif;font-size:13px;color:#1A1A1A; }
+    #fiq-header  { background:#1F1F1F;position:relative;overflow:hidden;flex-shrink:0; }
+    #fiq-htop    { padding:12px 20px 9px;border-bottom:1px solid #2E2E2E; }
+    #fiq-hco     { font-size:8px;font-weight:bold;color:#888;letter-spacing:.26em;line-height:1;margin-bottom:2px;padding-left:5px; }
+    #fiq-hiq     { font-size:24px;font-weight:bold;color:#fff;letter-spacing:.06em;line-height:1;padding-left:5px; }
+    #fiq-hdiv    { width:1px;height:32px;background:#444;margin:0 12px;flex-shrink:0; }
+    #fiq-hyard   { font-size:9px;font-weight:bold;color:#888;letter-spacing:.18em;line-height:1;margin-bottom:2px; }
+    #fiq-hcmd    { font-size:18px;font-weight:bold;color:#CC0000;letter-spacing:.1em;line-height:1; }
+    #fiq-hright  { text-align:right; }
+    #fiq-clock   { font-size:18px;font-weight:bold;color:#fff;line-height:1;font-family:'Courier New',monospace; }
+    #fiq-date    { font-size:9px;color:#888;letter-spacing:.1em;margin-top:2px; }
+    #fiq-user    { font-size:9px;color:#555;margin-top:1px; }
+    .fiq-kpi     { text-align:center;background:#2A2A2A;border-radius:4px;padding:6px 12px;border:1px solid #383838;min-width:74px; }
+    .fiq-kl      { font-size:7px;color:#888;letter-spacing:.12em;text-transform:uppercase;margin-bottom:2px; }
+    .fiq-kv      { font-size:18px;font-weight:bold;line-height:1; }
+    #fiq-redrule { height:3px;background:linear-gradient(90deg,#CC0000,#FF6666,#CC0000); }
+    #fiq-filter  { background:#fff;border-bottom:1px solid #CCC;padding:8px 20px;flex-wrap:wrap; }
+    .fiq-filterlbl { font-size:10px;font-weight:bold;color:#555;letter-spacing:.1em;white-space:nowrap; }
+    #fiq-grpsel  { padding:5px 10px;border:1px solid #CCC;border-radius:4px;font-size:12px;min-width:200px;background:#fff;color:#1A1A1A;height:28px; }
+    #fiq-shiftsel{ padding:5px 10px;border:1px solid #CCC;border-radius:4px;font-size:12px;background:#fff;color:#1A1A1A;height:28px; }
+    #fiq-refbtn  { padding:5px 14px;background:#CC0000;color:#fff;border:none;border-radius:4px;font-size:10px;font-weight:bold;letter-spacing:.08em;height:28px;cursor:pointer; }
+    #fiq-upd     { font-size:10px;color:#888;margin-left:auto;white-space:nowrap; }
+    .fiq-sclbl   { font-size:8px;color:#777;letter-spacing:.08em;text-transform:uppercase;margin-bottom:2px; }
+    .fiq-sccnt   { font-size:20px;font-weight:bold;line-height:1; }
+    .fiq-scu     { font-size:10px;font-weight:normal;color:#777; }
+    #fiq-tabs    { background:#fff;border-bottom:1px solid #CCC;padding:0 20px; }
+    .fiq-tab     { background:none;border:none;border-bottom:3px solid transparent;color:#666;padding:9px 16px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;margin-bottom:-1px;cursor:pointer;font-family:Arial,sans-serif; }
+    .fiq-tab-on  { border-bottom-color:#CC0000;color:#CC0000;font-weight:bold; }
+    #fiq-content { padding:14px 20px;flex:1; }
+    .fiq-pc      { background:#fff;border:1px solid #CCC;border-radius:4px;padding:13px 15px;margin-bottom:10px; }
+    .fiq-rr      { height:2px;background:#CC0000;margin-bottom:7px; }
+    .fiq-ph      { font-size:9px;font-weight:bold;color:#CC0000;letter-spacing:.12em;text-transform:uppercase;margin-bottom:9px; }
+    .fiq-brow    { margin-bottom:9px; }
+    .fiq-btrk    { height:7px;background:#F0F0F0;border-radius:3px;overflow:hidden; }
+    .fiq-bfill   { height:100%;border-radius:3px;transition:width .8s; }
+    .fiq-krow    { margin-bottom:8px; }
+    .fiq-kbar    { width:3px;height:30px;border-radius:2px;flex-shrink:0;margin-top:1px; }
+    .fiq-card    { background:#fff;border-radius:4px;padding:12px 15px;cursor:pointer;border:1px solid #CCC;box-shadow:0 1px 3px rgba(0,0,0,.05);margin-bottom:8px;font-size:12px;color:#1A1A1A; }
+    .fiq-sbadge  { display:inline-flex;align-items:center;gap:5px;border-radius:3px;padding:3px 9px;font-size:9px;font-weight:bold;letter-spacing:.08em;border:1px solid;white-space:nowrap;margin-left:auto; }
+    .fiq-mc      { background:#F5F5F5;border:1px solid #E0E0E0;border-radius:3px;padding:5px 7px;text-align:center; }
+    .fiq-mclbl   { font-size:7px;color:#777;margin-bottom:2px;letter-spacing:.06em;text-transform:uppercase; }
+    .fiq-mcval   { font-size:12px;font-weight:bold;line-height:1; }
+    .fiq-fc      { flex:1;border-radius:3px;padding:5px 7px;border:1px solid #E0E0E0;background:#F5F5F5; }
+    .fiq-fcal    { background:#FFF3F3;border-color:#CC0000; }
+    .fiq-fclbl   { font-size:7px;color:#777;letter-spacing:.06em;text-transform:uppercase;margin-bottom:2px; }
+    .fiq-fcval   { font-size:12px;font-weight:bold;line-height:1; }
+    .fiq-dbox    { border-radius:3px;padding:8px 10px;border:1px solid #E0E0E0;border-left:3px solid; }
+    .fiq-dlbl    { font-size:7px;color:#777;letter-spacing:.08em;text-transform:uppercase;margin-bottom:3px; }
+    .fiq-scrd    { background:#fff;border:1px solid #CCC;border-radius:4px;padding:15px 17px;margin-bottom:13px; }
+    .fiq-sbox    { background:#F5F5F5;border:1px solid #E0E0E0;border-radius:3px;padding:8px 10px;margin-bottom:6px; }
+    .fiq-sbox-al { background:#FFF3F3;border-color:#CC0000; }
+    .fiq-slbl    { font-size:7px;color:#777;margin-bottom:2px;letter-spacing:.07em;text-transform:uppercase; }
+    .fiq-sval    { font-size:16px;font-weight:bold;line-height:1; }
+    .fiq-ch      { font-size:8px;font-weight:bold;color:#CC0000;letter-spacing:.1em;text-transform:uppercase;margin-bottom:7px; }
+    .fiq-colrule { height:2px;background:#CC0000;margin-bottom:6px; }
+    .fiq-rcrd    { background:#fff;border:1px solid #CCC;border-radius:4px;padding:14px; }
+    .fiq-rcrd-top{ border-color:#CC0000;border-top:3px solid #CC0000;box-shadow:0 2px 10px rgba(204,0,0,.1); }
+    .fiq-sbox2   { background:#F5F5F5;border:1px solid #E0E0E0;border-radius:3px;padding:8px 10px; }
+    .fiq-pkfc    { text-align:center;background:#fff;border:1px solid #CCC;border-radius:3px;padding:6px 10px;min-width:58px; }
+    .fiq-iox-badge { display:inline-flex;align-items:center;gap:4px;font-size:8px;font-weight:bold;border-radius:3px;padding:2px 7px;border:1px solid;letter-spacing:.06em; }
+    .fiq-achip   { border-radius:3px;padding:8px 10px;margin-bottom:7px;border:1px solid; }
+    .fiq-empty   { text-align:center;padding:30px 20px;color:#888;font-size:12px; }
+    #fiq-footer  { border-top:1px solid #CCC;padding:8px 20px;background:#fff;font-size:9px;color:#888;flex-shrink:0;margin-top:auto; }
+    #fiq-livebadge { background:#2A2A2A;border-radius:4px;padding:6px 11px;border:1px solid #383838; }
+    #fiq-sc-tm { background:#F0FAF0;padding:10px 12px;border-right:1px solid #E8E8E8; }
+    #fiq-sc-ti { background:#FFFBF0;padding:10px 12px;border-right:1px solid #E8E8E8; }
+    #fiq-sc-bm { background:#FAF0FF;padding:10px 12px;border-right:1px solid #E8E8E8; }
+    #fiq-sc-bi { background:#FFF3F3;padding:10px 12px;border-right:1px solid #E8E8E8; }
+    #fiq-sc-mv { background:#F0F4FF;padding:10px 12px;border-right:1px solid #E8E8E8; }
+    #fiq-sc-pk { background:#F4F4F4;padding:10px 12px; }
+  `;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   JS-FORCED LAYOUT — sets display properties directly on DOM.
+   Runs after every render. Cannot be overridden by any
+   stylesheet injected by the MyGeotab host frame.
+══════════════════════════════════════════════════════════════ */
+function fl() {
+  const S = (id, css) => { const e = document.getElementById(id); if(e) e.style.cssText = css; };
+  const Q = (sel, css) => document.querySelectorAll(sel).forEach(e => e.style.cssText += ';' + css);
+
+  S('fiq-htop',      'display:flex;align-items:center;justify-content:space-between;padding:12px 20px 9px;border-bottom:1px solid #2E2E2E');
+  S('fiq-hlogo',     'display:flex;align-items:center;gap:0');
+  S('fiq-hright',    'text-align:right');
+  S('fiq-kpirow',    'display:flex;align-items:center;gap:7px;padding:8px 20px 10px;flex-wrap:wrap');
+  S('fiq-kpispc',    'flex:1');
+  S('fiq-livebadge', 'display:flex;align-items:center;gap:6px;background:#2A2A2A;border-radius:4px;padding:6px 11px;border:1px solid #383838');
+  S('fiq-filter',    'display:flex;align-items:center;gap:10px;background:#fff;border-bottom:1px solid #CCC;padding:8px 20px;flex-shrink:0;flex-wrap:wrap');
+  S('fiq-strip',     'display:grid;grid-template-columns:repeat(6,1fr);background:#fff;border-bottom:1px solid #CCC;flex-shrink:0');
+  ['fiq-sc-tm','fiq-sc-ti','fiq-sc-bm','fiq-sc-bi','fiq-sc-mv','fiq-sc-pk'].forEach(id => {
+    const e = document.getElementById(id);
+    if(e) { e.style.display='flex'; e.style.alignItems='center'; e.style.gap='8px'; }
+  });
+  S('fiq-tabs',       'display:flex;background:#fff;border-bottom:1px solid #CCC;padding:0 20px;flex-shrink:0');
+  S('fiq-live-layout','display:grid;grid-template-columns:1fr 275px;gap:14px');
+  S('fiq-content',    'padding:14px 20px;flex:1');
+  S('fiq-footer',     'display:flex;justify-content:space-between;align-items:center;border-top:1px solid #CCC;padding:8px 20px;background:#fff;font-size:9px;color:#888;flex-shrink:0;margin-top:auto');
+  S('fiq-rank-grid',  'display:grid;grid-template-columns:repeat(3,1fr);gap:12px');
+  Q('.fiq-ci',        'display:flex;align-items:center;gap:11px');
+  Q('.fiq-namerow',   'display:flex;align-items:center;gap:7px;margin-bottom:5px;flex-wrap:wrap');
+  Q('.fiq-cright',    'display:flex;gap:12px;flex-shrink:0');
+  Q('.fiq-sbar',      'display:flex;gap:2px;align-items:center');
+  Q('.fiq-mini',      'display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-top:8px;padding-top:8px;border-top:1px solid #EBEBEB');
+  Q('.fiq-frow',      'display:flex;gap:5px;margin-top:7px;padding-top:7px;border-top:1px solid #EBEBEB');
+  Q('.fiq-exp-open',  'display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:9px;padding-top:9px;border-top:1px solid #EBEBEB');
+  Q('.fiq-avatar',    'display:flex;align-items:center;justify-content:center;width:48px;height:48px;border-radius:50%;flex-shrink:0;font-size:20px');
+  Q('.fiq-blbl',      'display:flex;justify-content:space-between;font-size:9px;margin-bottom:3px');
+  Q('.fiq-krow',      'display:flex;gap:8px;margin-bottom:8px;align-items:flex-start');
+  Q('.fiq-achip-hdr', 'display:flex;justify-content:space-between;align-items:center;margin-bottom:3px');
+  Q('.fiq-sg4',       'display:grid;grid-template-columns:repeat(4,1fr);gap:14px');
+  Q('.fiq-scrd-hdr',  'display:flex;align-items:center;justify-content:space-between;margin-bottom:13px;padding-bottom:11px;border-bottom:1px solid #E8E8E8');
+  Q('.fiq-scrd-l',    'display:flex;align-items:center;gap:13px');
+  Q('.fiq-rcrd-hdr',  'display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:11px');
+  Q('.fiq-rg2',       'display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:7px');
+  Q('.fiq-pkrow',     'display:flex;align-items:center;gap:12px;margin-top:11px;background:#F7F7F7;border:1px solid #CCC;border-left:5px solid #999;border-radius:4px;padding:11px 14px');
+  Q('.fiq-pkfuel',    'display:flex;gap:6px');
+}
+
+/* ══════════════════════════════════════════════════════════════
+   APP STATE
+══════════════════════════════════════════════════════════════ */
+injectVisualCSS();
+
+let gApi = null, gState = null, refreshTimer = null, layoutTimer = null;
+let fleet = [], selGroup = "", userGids = [];
+
+// Geotab Diagnostic IDs
+const DIAG = {
+  AUX1:     "DiagnosticAuxiliary1Id",
+  IGNITION: "DiagnosticIgnitionId",
+  SPEED:    "DiagnosticSpeedId",
+  FUEL:     "DiagnosticFuelLevelId",
+  DEF:      "DiagnosticAdBlueLevelId",
+  ODOMETER: "DiagnosticOdometerAdjustmentId",
+  ENG_HRS:  "DiagnosticEngineHoursId"
+};
+
+// State configuration — labels, colors, backgrounds, borders
+const ST = {
+  "trailer-move":  { label:"Trailer Move",    color:"#1B7A1B", bg:"#F0FAF0", border:"#A8D5A8" },
+  "trailer-idle":  { label:"Trailer Idling",  color:"#B87800", bg:"#FFFBF0", border:"#F0D080" },
+  "bobtail-move":  { label:"Bobtail Move",    color:"#6B21A8", bg:"#FAF0FF", border:"#CCA8E8" },
+  "bobtail-idle":  { label:"Bobtail Idling",  color:"#CC0000", bg:"#FFF3F3", border:"#F0AAAA" },
+  "moving":        { label:"Moving",          color:"#3B5BDB", bg:"#F0F4FF", border:"#B0C4FF" },
+  "idle":          { label:"Idle",            color:"#888",    bg:"#F5F5F5", border:"#DDD"    },
+  "parked":        { label:"Parked / Off",    color:"#777",    bg:"#F4F4F4", border:"#CCC"    }
+};
+
+/* Determine state from sensor readings.
+   ig = ignition on, ax = AUX1 high (fifth wheel latched),
+   kph = speed in km/h, ie = IOX equipped, ih = AUX1 signal present */
+function rState(ig, ax, kph, ie, ih) {
+  if (!ig) return "parked";
+  const mv = kph > 3.2; // > 2 mph
+  if (!ie || !ih) return mv ? "moving" : "idle";
+  if (ax && mv)  return "trailer-move";
+  if (ax && !mv) return "trailer-idle";
+  if (!ax && mv) return "bobtail-move";
+  return "bobtail-idle";
+}
+
+// Utility helpers
+const r1    = v => Math.round(v * 10) / 10;
+const toMi  = k => r1(k * 0.621371);
+const fmt   = m => m < 60 ? `${m}m` : `${Math.floor(m/60)}h ${m%60}m`;
+const pct2  = v => v == null ? null : Math.round(v > 1 ? v : v * 100);
+const lc    = p => !p && p !== 0 ? "#888" : p <= 15 ? "#CC0000" : p <= 25 ? "#B87800" : "#1B5E20";
+const sc    = s => s >= 75 ? "#1B5E20" : s >= 50 ? "#B87800" : "#CC0000";
+const $     = id => document.getElementById(id);
+const T     = (id, v) => { const e = $(id); if (e) e.textContent = v; };
+
+function pName(n) {
+  const m = (n || "").match(/^\(([^)]+)\)\s*(.+)$/);
+  return m ? { radio: m[1].trim(), unit: m[2].trim() } : { radio: null, unit: (n || "Unknown").trim() };
+}
+
+/* ══════════════════════════════════════════════════════════════
+   GEOTAB ADD-IN REGISTRATION
+   SDK Pattern: geotab.addin.<key> = function(api, state){ return {...} }
+   Required exports: initialize(api, state, callback), focus(), blur()
+   - initialize: called once when add-in is loaded; call callback() when DOM is ready.
+   - focus:      called when the user navigates to this add-in's page.
+   - blur:       called when the user navigates away.
+   Reference: developers.geotab.com/myGeotab/addIns/developingAddIns
+══════════════════════════════════════════════════════════════ */
+if (typeof geotab !== "undefined") {
+  geotab.addin.fleetsourceIQ = function(api, state) {
     return {
 
-      initialize: function (api, state, callback) {
-        _api = api;
-        document.getElementById('shiftStart')
-          .addEventListener('change', function () { IQ.refresh(); });
-        document.getElementById('refreshBtn')
-          .addEventListener('click',  function () { IQ.refresh(); });
-        document.getElementById('retryBtn')
-          .addEventListener('click',  function () { IQ.refresh(); });
+      initialize: function(freshApi, freshState, callback) {
+        // Store references for use in async functions
+        gApi   = freshApi;
+        gState = freshState;
 
-        // Tab switching
-        var tabs = document.querySelectorAll('.tab-btn');
-        for (var i = 0; i < tabs.length; i++) {
-          tabs[i].addEventListener('click', function () {
-            document.querySelectorAll('.tab-btn').forEach(function (b) { b.classList.remove('active'); });
-            document.querySelectorAll('.tab-content').forEach(function (c) { c.classList.remove('active'); });
-            this.classList.add('active');
-            document.getElementById('tab-' + this.dataset.tab).classList.add('active');
-          });
-        }
+        // Inject CSS and wire up DOM events (DOM is already loaded when initialize fires)
+        injectVisualCSS();
+        $("fiq-grpsel") .addEventListener("change", () => { selGroup = $("fiq-grpsel").value; refreshData(); });
+        $("fiq-shiftsel").addEventListener("change", () => refreshData());
+        $("fiq-refbtn") .addEventListener("click",   () => refreshData());
+        $("fiq-retry")  .addEventListener("click",   () => initAddin());
+        $("fiq-tab-live") .addEventListener("click", function(){ showTab("live",  this); });
+        $("fiq-tab-stats").addEventListener("click", function(){ showTab("stats", this); });
+        $("fiq-tab-rank") .addEventListener("click", function(){ showTab("rank",  this); });
+        const tl = $("fiq-tab-live"); if (tl) tl.classList.add("fiq-tab-on");
+        startClock();
 
-        IQ.refresh();
+        // Kick off async initialization without blocking callback
         callback();
+        setTimeout(initAddin, 0);
       },
 
-      focus: function (api, state) { IQ.refresh(); },
-      blur:  function () {}
+      focus: function() {
+        // Resume auto-refresh when page is visible
+        if (!refreshTimer) refreshTimer = setInterval(refreshData, 30000);
+      },
 
-    }; // end return
+      blur: function() {
+        // Pause auto-refresh when user navigates away
+        clearInterval(refreshTimer);
+        refreshTimer = null;
+      }
+    };
+  };
+} else {
+  // Standalone / demo mode (not inside MyGeotab frame)
+  window.addEventListener("DOMContentLoaded", () => {
+    injectVisualCSS();
+    $("fiq-grpsel") .addEventListener("change", () => { selGroup = $("fiq-grpsel").value; refreshData(); });
+    $("fiq-shiftsel").addEventListener("change", () => refreshData());
+    $("fiq-refbtn") .addEventListener("click",   () => refreshData());
+    $("fiq-retry")  .addEventListener("click",   () => initAddin());
+    $("fiq-tab-live") .addEventListener("click", function(){ showTab("live",  this); });
+    $("fiq-tab-stats").addEventListener("click", function(){ showTab("stats", this); });
+    $("fiq-tab-rank") .addEventListener("click", function(){ showTab("rank",  this); });
+    const tl = $("fiq-tab-live"); if (tl) tl.classList.add("fiq-tab-on");
+    startClock();
+    setTimeout(loadDemo, 800);
+  });
+}
 
-  }; // end addin factory
-  </script>
+/* ══════════════════════════════════════════════════════════════
+   CLOCK
+══════════════════════════════════════════════════════════════ */
+function startClock() {
+  setInterval(() => {
+    const n = new Date();
+    T("fiq-clock", n.toLocaleTimeString([], { hour:"2-digit", minute:"2-digit", second:"2-digit" }));
+    T("fiq-date",  n.toLocaleDateString([],  { weekday:"short", month:"short", day:"numeric" }));
+  }, 1000);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   INIT & DATA
+══════════════════════════════════════════════════════════════ */
+async function initAddin() {
+  showScreen("loading");
+  const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error("API timeout — check network or re-login to MyGeotab")), 15000));
+  try {
+    await Promise.race([loadGroups(), timeout]);
+    await refreshData();
+    showScreen("app");
+  } catch(e) {
+    showError(e.message || String(e));
+  }
+}
+
+async function loadGroups() {
+  const SYS = new Set(["GroupCompanyId","GroupNothingId","GroupAssetId","GroupDriverId","GroupEVId","GroupRootId"]);
+  let cu = null;
+  try {
+    if (gState?.credentials?.userName) {
+      const u = await gapi("Get", { typeName:"User", search:{ name: gState.credentials.userName } });
+      cu = u?.[0];
+      if (cu?.name) T("fiq-user", cu.name);
+    }
+  } catch(_) {}
+
+  const all = await gapi("Get", { typeName:"Group", resultsLimit:1000 });
+  let vis = (all || []).filter(g => g.id && !SYS.has(g.id));
+
+  if (cu?.companyGroups?.length) {
+    const ms = new Set(cu.companyGroups.map(g => g.id));
+    userGids = [...ms];
+    const mine = vis.filter(g => ms.has(g.id));
+    if (mine.length) vis = mine;
+  }
+
+  const sel = $("fiq-grpsel");
+  sel.innerHTML = '<option value="">— All My Vehicles —</option>';
+  [...vis].sort((a,b) => (a.name||"").localeCompare(b.name||""))
+    .forEach(g => {
+      const o = document.createElement("option");
+      o.value = g.id; o.textContent = g.name || g.id;
+      sel.appendChild(o);
+    });
+  if (vis.length === 1) { sel.value = vis[0].id; selGroup = vis[0].id; }
+}
+
+/* Compute shift window start from the dropdown selection */
+function shiftFrom() {
+  const v = $("fiq-shiftsel")?.value || "rolling12";
+  const d = new Date();
+  if (v === "rolling12") { d.setHours(d.getHours() - 12); return d; }
+  const h = parseInt(v, 10);
+  d.setHours(h, 0, 0, 0);
+  if (d > new Date()) d.setDate(d.getDate() - 1);
+  return d;
+}
+
+async function refreshData() {
+  const btn = $("fiq-refbtn"); if (btn) btn.textContent = "↻ …";
+  try {
+    // Group-aware device search (SDK requirement — always pass group context)
+    const ds = selGroup
+      ? { groups: [{ id: selGroup }] }
+      : userGids.length ? { groups: userGids.map(id => ({ id })) } : {};
+
+    const [devices, siList] = await Promise.all([
+      gapi("Get", { typeName:"Device",           search:ds, resultsLimit:500 }),
+      gapi("Get", { typeName:"DeviceStatusInfo", search:ds, resultsLimit:500 })
+    ]);
+
+    if (!devices?.length) { fleet = []; render(); return; }
+
+    const siMap = {};
+    (siList || []).forEach(si => { siMap[si.device.id] = si; });
+
+    const devObjs = devices.map(d => ({ id: d.id }));
+    const now  = new Date();
+    const ago5 = new Date(now - 300000); // last 5 min for current state
+    const sf   = shiftFrom();           // shift window start
+
+    const dk = Object.keys(DIAG);
+
+    // Parallel fetch: current state (5 min) + shift-window histories
+    const [dAll, oSh, auxHist, spdHist, ignHist] = await Promise.all([
+      // Current sensor state (last 5 min)
+      Promise.all(dk.map(k => gapi("Get", {
+        typeName: "StatusData",
+        search: {
+          diagnosticSearch: { id: DIAG[k] },
+          deviceSearch:     { devices: devObjs },
+          fromDate: ago5.toISOString(),
+          toDate:   now.toISOString()
+        },
+        resultsLimit: devices.length * 3
+      }).catch(() => []))),
+
+      // Odometer at shift start (±10 min window) for shift miles
+      gapi("Get", {
+        typeName: "StatusData",
+        search: {
+          diagnosticSearch: { id: DIAG.ODOMETER },
+          deviceSearch:     { devices: devObjs },
+          fromDate: sf.toISOString(),
+          toDate:   new Date(sf.getTime() + 600000).toISOString()
+        },
+        resultsLimit: devices.length * 2
+      }).catch(() => []),
+
+      // AUX1 history for shift (move counting + sensor safety)
+      gapi("Get", {
+        typeName: "StatusData",
+        search: {
+          diagnosticSearch: { id: DIAG.AUX1 },
+          deviceSearch:     { devices: devObjs },
+          fromDate: sf.toISOString(),
+          toDate:   now.toISOString()
+        },
+        resultsLimit: devices.length * 500
+      }).catch(() => []),
+
+      // Speed history for shift (move counting + sensor safety)
+      gapi("Get", {
+        typeName: "StatusData",
+        search: {
+          diagnosticSearch: { id: DIAG.SPEED },
+          deviceSearch:     { devices: devObjs },
+          fromDate: sf.toISOString(),
+          toDate:   now.toISOString()
+        },
+        resultsLimit: devices.length * 500
+      }).catch(() => []),
+
+      // Ignition history for shift (sensor safety: ignition-on duration)
+      gapi("Get", {
+        typeName: "StatusData",
+        search: {
+          diagnosticSearch: { id: DIAG.IGNITION },
+          deviceSearch:     { devices: devObjs },
+          fromDate: sf.toISOString(),
+          toDate:   now.toISOString()
+        },
+        resultsLimit: devices.length * 200
+      }).catch(() => [])
+    ]);
+
+    // Latest value per device for current-state sensors
+    const dm = {};
+    dk.forEach((k, i) => {
+      (dAll[i] || []).forEach(sd => {
+        const id = sd.device.id;
+        if (!dm[id]) dm[id] = {};
+        if (!dm[id][k+"_t"] || sd.dateTime > dm[id][k+"_t"]) {
+          dm[id][k]      = Number(sd.value);
+          dm[id][k+"_t"] = sd.dateTime;
+        }
+      });
+    });
+
+    // Earliest odometer reading per device at shift start
+    const smStart = {};
+    (oSh || []).forEach(sd => {
+      const id = sd.device.id;
+      if (!smStart[id] || sd.dateTime < smStart[id].dt) smStart[id] = { val: Number(sd.value), dt: sd.dateTime };
+    });
+
+    // Build per-device history arrays (sorted chronologically)
+    const auxMap = {}, spdMap = {}, ignMap = {};
+    (auxHist || []).forEach(sd => { (auxMap[sd.device.id] = auxMap[sd.device.id] || []).push({ t: sd.dateTime, v: Number(sd.value) }); });
+    (spdHist || []).forEach(sd => { (spdMap[sd.device.id] = spdMap[sd.device.id] || []).push({ t: sd.dateTime, v: Number(sd.value) }); });
+    (ignHist || []).forEach(sd => { (ignMap[sd.device.id] = ignMap[sd.device.id] || []).push({ t: sd.dateTime, v: Number(sd.value) }); });
+
+    fleet = devices.map(dev => {
+      const d  = dm[dev.id]  || {};
+      const si = siMap[dev.id] || {};
+      const { radio, unit } = pName(dev.name);
+
+      // Current state values
+      const ig  = (d.IGNITION || 0) > 0.5;
+      const ax  = (d.AUX1     || 0) > 0.5;
+      const kph = si.speed !== undefined ? si.speed : (d.SPEED || 0);
+      const fp  = d.FUEL    !== undefined ? pct2(d.FUEL)    : null;
+      const dp  = d.DEF     !== undefined ? pct2(d.DEF)     : null;
+      const on  = d.ODOMETER !== undefined ? d.ODOMETER     : null;
+      const os  = smStart[dev.id] ? smStart[dev.id].val     : null;
+      const sm2 = (on !== null && os !== null) ? toMi(Math.max(0, on - os)) : null;
+      const eh  = d.ENG_HRS !== undefined ? r1(d.ENG_HRS) : null;
+      const ih  = d.AUX1_t  !== undefined;  // AUX1 has reported this session → IOX equipped
+      const ie  = ih;
+
+      // ── Offline detection (GO9 heartbeat: flag after 7 days of silence) ──
+      const lastSeen   = new Date(dev.lastCommunicationDate || dev.lastConnectedDate || 0);
+      const daysOffline = (now - lastSeen) / 86400000;
+
+      // ── Completed Move Count ──
+      // A move is valid only when AUX1 transitions LOW→HIGH while speed > 3.2 kph (2 mph).
+      // This eliminates "ghost" moves from stationary jaw cycling.
+      const aH = (auxMap[dev.id] || []).sort((a,b) => a.t < b.t ? -1 : 1);
+      const sH = (spdMap[dev.id] || []).sort((a,b) => a.t < b.t ? -1 : 1);
+      let mv = 0, prevAux = 0;
+      aH.forEach(pt => {
+        if (prevAux < 0.5 && pt.v > 0.5) {
+          // Find nearest speed reading at this timestamp
+          const nearest = sH.length ? sH.reduce((best, sp) =>
+            Math.abs(sp.t.localeCompare(pt.t)) < Math.abs(best.t.localeCompare(pt.t)) ? sp : best, sH[0])
+            : { v: 0 };
+          if (nearest.v > 3.2) mv++;
+        }
+        prevAux = pt.v;
+      });
+
+      // ── Sensor Safety: "No-False-Alarm" Logic ──
+      // Only flag CHECK SENSOR if ALL THREE conditions are met:
+      //   1. Ignition has been ON for > 2 hours (continuous or cumulative) this shift
+      //   2. Speed has exceeded 16 kph (10 mph) at least 5 times
+      //   3. AUX1 (fifth wheel sensor) never registered HIGH all shift
+      // This prevents false alerts during yard checks (slow crawl, no hook).
+      let sensorSuspect = false;
+      if (ie && ih) {
+        const iH = (ignMap[dev.id] || []).sort((a,b) => a.t < b.t ? -1 : 1);
+        let ignOnMs = 0, lastIgnOn = null;
+        iH.forEach(pt => {
+          if (pt.v > 0.5 && !lastIgnOn) lastIgnOn = new Date(pt.t);
+          else if (pt.v <= 0.5 && lastIgnOn) { ignOnMs += new Date(pt.t) - lastIgnOn; lastIgnOn = null; }
+        });
+        if (lastIgnOn) ignOnMs += Date.now() - lastIgnOn; // still on
+        const ignOnHours    = ignOnMs / 3600000;
+        const highSpeedCount = sH.filter(sp => sp.v > 16).length;
+        const auxEverHigh    = aH.some(pt => pt.v > 0.5);
+        if (ignOnHours > 2 && highSpeedCount >= 5 && !auxEverHigh) sensorSuspect = true;
+      }
+
+      return {
+        id: dev.id,
+        vin: dev.vehicleIdentificationNumber || "—",
+        gn:  dev.name,
+        radio, unit,
+        state: daysOffline > 7 ? "parked" : rState(ig, ax, kph, ie, ih),
+        offline: daysOffline > 7,
+        lastSeen,
+        ig, ax, ie, ih,
+        mph: r1(kph * 0.621371),
+        fp, dp, sm: sm2, eh,
+        us: 0, dur: 0, // utilization and duration populated by future agentic pass
+        mv,
+        ss: sensorSuspect
+      };
+    });
+
+    render();
+    T("fiq-upd", "Updated " + now.toLocaleTimeString([], { hour:"2-digit", minute:"2-digit", second:"2-digit" }));
+  } catch(e) {
+    console.error("SpotterIQ:", e);
+  }
+  if (btn) btn.textContent = "↻ REFRESH";
+}
+
+/* Promisified Geotab API call */
+function gapi(method, params) {
+  return new Promise((resolve, reject) => {
+    if (!gApi) { reject(new Error("Geotab API not initialized")); return; }
+    gApi.call(method, params, resolve, reject);
+  });
+}
+
+/* ══════════════════════════════════════════════════════════════
+   DEMO MODE (no MyGeotab frame detected)
+══════════════════════════════════════════════════════════════ */
+function loadDemo() {
+  fleet = [
+    { id:"b1", vin:"1T9TSTA89PR825810", gn:"11974 - TICO Pro Spotter", radio:null, unit:"11974", state:"trailer-move",  offline:false, lastSeen:new Date(), ig:true,  ax:true,  ie:true,  ih:true,  mph:8.2,  fp:72, dp:61,   sm:21.6, eh:1842.3, us:84, dur:4,  mv:12, ss:false },
+    { id:"b2", vin:"1T9TSTA80PR825811", gn:"11975 - TICO Pro Spotter", radio:null, unit:"11975", state:"bobtail-idle",  offline:false, lastSeen:new Date(), ig:true,  ax:false, ie:true,  ih:true,  mph:0,    fp:18, dp:12,   sm:15.9, eh:2103.7, us:41, dur:18, mv:6,  ss:true  },
+    { id:"b3", vin:"1T9TSTA84PR825813", gn:"11976 - TICO Pro Spotter", radio:null, unit:"11976", state:"trailer-idle",  offline:false, lastSeen:new Date(), ig:true,  ax:true,  ie:true,  ih:true,  mph:0,    fp:55, dp:null, sm:15.8, eh:1677.1, us:67, dur:9,  mv:9,  ss:false },
+    { id:"b4", vin:"1T9TSTA88PR825815", gn:"11978 - TICO Pro Spotter", radio:null, unit:"11978", state:"trailer-move",  offline:false, lastSeen:new Date(), ig:true,  ax:true,  ie:true,  ih:true,  mph:9.1,  fp:88, dp:79,   sm:25.0, eh:1531.4, us:91, dur:2,  mv:15, ss:false },
+    { id:"b5", vin:"1T9TSTA8XPR825816", gn:"11979 - TICO Pro Spotter", radio:null, unit:"11979", state:"bobtail-move",  offline:false, lastSeen:new Date(), ig:true,  ax:false, ie:true,  ih:true,  mph:11.7, fp:41, dp:38,   sm:19.2, eh:1904.8, us:73, dur:3,  mv:10, ss:false },
+    { id:"b6", vin:"1T9TSTA8XPR825817", gn:"G97621211666",             radio:null, unit:"9762121166", state:"parked",   offline:false, lastSeen:new Date(), ig:false, ax:false, ie:true,  ih:false, mph:0,    fp:93, dp:88,   sm:7.3,  eh:1298.2, us:0,  dur:47, mv:4,  ss:false },
+    { id:"b7", vin:"3AKGGLD57FDGF0001", gn:"Utility Truck 201",        radio:null, unit:"Utility 201", state:"moving",  offline:false, lastSeen:new Date(), ig:true,  ax:false, ie:false, ih:false, mph:14.2, fp:61, dp:null, sm:34.1, eh:3812.4, us:0,  dur:7,  mv:0,  ss:false },
+  ];
+  $("fiq-grpsel").innerHTML = '<option value="">— Demo Mode —</option>';
+  render();
+  showScreen("app");
+  T("fiq-upd", "Demo mode — connect to MyGeotab for live data");
+}
+
+/* ══════════════════════════════════════════════════════════════
+   RENDER PIPELINE
+══════════════════════════════════════════════════════════════ */
+function render() { kpis(); strip(); cards(); stats(); rank(); setTimeout(fl, 20); }
+
+function kpis() {
+  const act = fleet.filter(t => t.state !== "parked");
+  const ix  = act.filter(t => t.ie);
+  const avg = ix.length ? Math.round(ix.reduce((a,t) => a + t.us, 0) / ix.length) : 0;
+  T("fiq-k-active", act.length);
+  T("fiq-k-moves",  fleet.reduce((a,t) => a + t.mv, 0));
+  T("fiq-k-tmi",    r1(fleet.filter(t => t.state.includes("trailer")).reduce((a,t) => a + (t.sm||0), 0)));
+  T("fiq-k-bmi",    r1(fleet.filter(t => t.state.includes("bobtail")).reduce((a,t) => a + (t.sm||0), 0)));
+  T("fiq-k-util",   avg + "%");
+  const ku = $("fiq-k-util"); if (ku) ku.style.color = avg>=70?"#1B5E20":avg>=50?"#B87800":"#CC0000";
+}
+
+function strip() {
+  const c = { tm:0, ti:0, bm:0, bi:0, mv:0, pk:0 };
+  fleet.forEach(t => {
+    if      (t.state==="trailer-move") c.tm++;
+    else if (t.state==="trailer-idle") c.ti++;
+    else if (t.state==="bobtail-move") c.bm++;
+    else if (t.state==="bobtail-idle") c.bi++;
+    else if (t.state==="moving" || t.state==="idle") c.mv++;
+    else c.pk++;
+  });
+  T("fiq-n-tm",c.tm); T("fiq-n-ti",c.ti); T("fiq-n-bm",c.bm);
+  T("fiq-n-bi",c.bi); T("fiq-n-mv",c.mv); T("fiq-n-pk",c.pk);
+  const tot = fleet.length || 1;
+  $("fiq-sbars").innerHTML = [
+    ["TRAILER MOVE",    "#1B7A1B", c.tm],
+    ["TRAILER IDLING",  "#B87800", c.ti],
+    ["BOBTAIL MOVE",    "#6B21A8", c.bm],
+    ["BOBTAIL IDLING",  "#CC0000", c.bi],
+    ["MOVING (NO IOX)", "#3B5BDB", c.mv],
+    ["PARKED / OFF",    "#999",    c.pk]
+  ].map(([l,col,n]) =>
+    `<div class="fiq-brow">
+      <div class="fiq-blbl"><span style="color:${col};font-weight:bold">${l}</span><span style="color:#888">${n} unit${n!==1?"s":""}</span></div>
+      <div class="fiq-btrk"><div class="fiq-bfill" style="width:${Math.round((n/tot)*100)}%;background:${col}"></div></div>
+    </div>`
+  ).join("");
+}
+
+/* Utilization donut SVG */
+function svg(s, z=48) {
+  const r=(z-6)/2, c=2*Math.PI*r, f=(s/100)*c, col=sc(s);
+  return `<svg width="${z}" height="${z}" style="transform:rotate(-90deg);flex-shrink:0">
+    <circle cx="${z/2}" cy="${z/2}" r="${r}" fill="none" stroke="#E8E8E8" stroke-width="5"/>
+    <circle cx="${z/2}" cy="${z/2}" r="${r}" fill="none" stroke="${col}" stroke-width="5" stroke-dasharray="${f} ${c}" stroke-linecap="round"/>
+    <text x="${z/2}" y="${z/2}" text-anchor="middle" dominant-baseline="central" fill="${col}" font-size="11" font-weight="bold" font-family="Arial" style="transform:rotate(90deg);transform-origin:${z/2}px ${z/2}px">${s}</text>
+  </svg>`;
+}
+
+/* IOX status badge */
+function ib(t) {
+  if (!t.ie) return `<span class="fiq-iox-badge" style="background:#F0F4FF;border-color:#B0C4FF;color:#3B5BDB">NO IOX</span>`;
+  if (!t.ih) return `<span class="fiq-iox-badge" style="background:#FFFBF0;border-color:#F0D080;color:#B87800">IOX—NO SIGNAL</span>`;
+  return `<span class="fiq-iox-badge" style="background:#F0FAF0;border-color:#A8D5A8;color:#1B7A1B">IOX ACTIVE</span>`;
+}
+
+/* Fuel / DEF / miles / hours row on card */
+function frow(t) {
+  const fc=lc(t.fp), dc=lc(t.dp), fl=t.fp!==null&&t.fp<=25, dl=t.dp!==null&&t.dp<=25;
+  return `<div class="fiq-frow">
+    <div class="fiq-fc${fl?" fiq-fcal":""}">
+      <div class="fiq-fclbl">FUEL${fl?' <span class="fiq-blink" style="color:#CC0000">⚠</span>':""}</div>
+      <div class="fiq-fcval" style="color:${fc}">${t.fp!==null?t.fp+"%":"—"}</div>
+      <div class="fiq-gauge"><div class="fiq-gf" style="width:${t.fp||0}%;background:${fc}"></div></div>
+    </div>
+    <div class="fiq-fc${dl?" fiq-fcal":""}">
+      <div class="fiq-fclbl">DEF${dl?' <span class="fiq-blink" style="color:#CC0000">⚠</span>':""}</div>
+      ${t.dp!==null
+        ? `<div class="fiq-fcval" style="color:${dc}">${t.dp}%</div><div class="fiq-gauge"><div class="fiq-gf" style="width:${t.dp}%;background:${dc}"></div></div>`
+        : `<div style="font-size:9px;color:#888;font-style:italic;margin-top:2px">Not broadcast</div>`}
+    </div>
+    <div class="fiq-fc"><div class="fiq-fclbl">MILES (SHIFT)</div><div class="fiq-fcval">${t.sm!==null?t.sm:"—"}<span style="font-size:8px;color:#888"> mi</span></div></div>
+    <div class="fiq-fc"><div class="fiq-fclbl">ENG HOURS</div><div class="fiq-fcval">${t.eh!==null?t.eh:"—"}<span style="font-size:8px;color:#888"> hr</span></div></div>
+  </div>`;
+}
+
+/* ── LIVE CARDS ── */
+function cards() {
+  if (!fleet.length) { $("fiq-cards").innerHTML = `<div class="fiq-empty">No vehicles found.</div>`; return; }
+  $("fiq-cards").innerHTML = fleet.map((t, i) => {
+    const st  = ST[t.state];
+    const pk  = t.state === "parked";
+    const al  = t.state === "bobtail-idle" && t.dur > 15;
+    const fw  = (t.fp !== null && t.fp <= 25) || (t.dp !== null && t.dp <= 25);
+    const av  = pk
+      ? `<div class="fiq-avatar" style="background:#E8E8E8;border:3px solid #CCC">🌙</div>`
+      : t.ie ? svg(t.us)
+      : `<div class="fiq-avatar" style="background:#F0F4FF;border:3px solid #B0C4FF">🚛</div>`;
+
+    // Fifth wheel status label — no "HIGH" or "LOW" shown, just Latched / Bobtail
+    const fwLabel = t.ie && t.ih ? (t.ax ? "Latched" : "Bobtail") : t.ie ? "No Sig" : "N/A";
+    const fwColor = t.ie && t.ih ? (t.ax ? "#1B7A1B" : "#CC0000") : "#888";
+
+    return `<div class="fiq-card" style="border-color:${al?"#CC0000":fw?"#B87800":"#CCC"};border-left:5px solid ${pk?"#999":st.color};${pk?"opacity:.88;background:#F7F7F7":""}" onclick="xp(${i})">
+      <div class="fiq-ci">${av}<div style="flex:1;min-width:0">
+        <div class="fiq-namerow">
+          <span style="font-size:15px;font-weight:bold;color:#1A1A1A;line-height:1">${t.unit}</span>
+          ${fw && !al ? `<span class="fiq-blink" style="font-size:8px;color:#B87800;font-weight:bold">⛽ LOW</span>` : ""}
+          <span class="fiq-sbadge" style="background:${st.bg};border-color:${st.border};color:${st.color}">
+            <span class="fiq-dot"><span class="fiq-dotr" style="background:${st.color}"></span><span class="fiq-dotc" style="background:${st.color}"></span></span>
+            ${st.label.toUpperCase()}
+          </span>
+          ${al  ? `<span class="fiq-blink2" style="font-size:8px;color:#CC0000;font-weight:bold">⚠ IDLE ${fmt(t.dur)}</span>` : ""}
+          ${t.ss ? `<span class="fiq-blink" style="font-size:8px;color:#3B5BDB;font-weight:bold">🔧 CHECK SENSOR</span>` : ""}
+        </div>
+        ${pk
+          ? `<div style="font-size:8px;color:#888;display:flex;gap:12px;flex-wrap:wrap"><span>Parked <strong>${fmt(t.dur)}</strong></span>${ib(t)}</div>`
+          : t.ie
+            ? `<div class="fiq-sbar"><div style="flex:${t.us};height:6px;border-radius:2px;background:#1B7A1B"></div><div style="flex:15;height:6px;border-radius:2px;background:#B87800"></div><div style="flex:10;height:6px;border-radius:2px;background:#6B21A8"></div><div style="flex:${Math.max(0,75-t.us)};height:6px;border-radius:2px;background:#CC0000"></div><span style="font-size:8px;color:#888;margin-left:7px;flex-shrink:0">shift</span></div>`
+            : `<div style="font-size:8px;color:#3B5BDB;margin-top:3px">GPS only — IOX-AUX not installed</div>`
+        }
+      </div>
+      <div class="fiq-cright">
+        <div style="text-align:center"><div style="font-size:20px;font-weight:bold;color:#1A1A1A;line-height:1">${t.mv||"—"}</div><div style="font-size:8px;color:#888;margin-top:2px">MOVES</div></div>
+        <div style="text-align:center"><div style="font-size:20px;font-weight:bold;color:${t.mph>0?"#1B7A1B":"#888"};line-height:1">${t.mph}<span style="font-size:9px"> mph</span></div><div style="font-size:8px;color:#888;margin-top:2px">SPEED</div></div>
+      </div></div>
+      <div class="fiq-mini">
+        <div class="fiq-mc"><span class="fiq-mclbl">Shift Mi</span><span class="fiq-mcval">${t.sm!==null?t.sm+" mi":"—"}</span></div>
+        <div class="fiq-mc"><span class="fiq-mclbl">Eng Hrs</span><span class="fiq-mcval">${t.eh!==null?t.eh+" hr":"—"}</span></div>
+        <div class="fiq-mc"><span class="fiq-mclbl">${t.ie?"Util":"IOX"}</span><span class="fiq-mcval" style="color:${t.ie?sc(t.us):"#3B5BDB"}">${t.ie?t.us+"%":"None"}</span></div>
+        <div class="fiq-mc"><span class="fiq-mclbl">5th Wheel</span><span class="fiq-mcval" style="color:${fwColor}">${fwLabel}</span></div>
+      </div>
+      ${frow(t)}
+      <div class="fiq-exp" id="fiq-e${i}">
+        <div class="fiq-dbox" style="border-left-color:${st.color};background:${st.bg}"><span class="fiq-dlbl">STATE</span><div style="font-size:12px;font-weight:bold;color:${st.color}">${st.label}</div></div>
+        <div class="fiq-dbox" style="border-left-color:#555;background:#F5F5F5"><span class="fiq-dlbl">GEOTAB ASSET</span><div style="font-size:10px;font-weight:bold;color:#555;word-break:break-all">${t.gn}</div></div>
+        <div class="fiq-dbox" style="border-left-color:#555;background:#F5F5F5"><span class="fiq-dlbl">VIN</span><div style="font-size:10px;font-weight:bold;color:#555;word-break:break-all">${t.vin}</div></div>
+        <div class="fiq-dbox" style="border-left-color:#555;background:#F5F5F5"><span class="fiq-dlbl">DEVICE ID</span><div style="font-size:10px;font-weight:bold;color:#555">${t.id}</div></div>
+      </div>
+    </div>`;
+  }).join("");
+
+  // Alerts
+  const idle = fleet.filter(t => t.state==="bobtail-idle" && t.dur > 15);
+  const fuel = fleet.filter(t => (t.fp!==null&&t.fp<=25) || (t.dp!==null&&t.dp<=25));
+  const sens = fleet.filter(t => t.ss);
+  const all  = [...new Set([...idle, ...fuel, ...sens])];
+  $("fiq-alerts").innerHTML = !all.length
+    ? `<div class="fiq-empty">No active alerts</div>`
+    : all.map(t => {
+        const isIdle = t.state==="bobtail-idle" && t.dur > 15;
+        const bg     = t.ss ? "#F0F4FF" : isIdle ? "#FFF3F3" : "#FFFBF0";
+        const bc     = t.ss ? "#3B5BDB" : isIdle ? "#CC0000" : "#B87800";
+        return `<div class="fiq-achip" style="background:${bg};border-color:${bc}">
+          <div class="fiq-achip-hdr">
+            <span style="font-size:13px;font-weight:bold">${t.unit}</span>
+            ${isIdle ? `<span class="fiq-blink2" style="font-size:9px;font-weight:bold;color:#CC0000">${fmt(t.dur)}</span>` : ""}
+          </div>
+          <div style="font-size:8px;color:#888">
+            ${t.ss  ? "🔧 Check 5th Wheel Sensor " : ""}
+            ${isIdle ? "Bobtail idling " : ""}
+            ${t.fp!==null&&t.fp<=25 ? `⛽ Fuel ${t.fp}%` : ""}
+            ${t.dp!==null&&t.dp<=25 ? `⛽ DEF ${t.dp}%`  : ""}
+          </div>
+        </div>`;
+      }).join("");
+
+  setTimeout(fl, 10);
+}
+
+/* ── UNIT STATS ── */
+function stats() {
+  $("fiq-stats-list").innerHTML = fleet.map(t => {
+    const st=ST[t.state], pk=t.state==="parked", fc=lc(t.fp), dc=lc(t.dp);
+
+    // Fifth wheel display — show Latched / Bobtail, no HIGH/LOW
+    const fwVal   = t.ih ? (t.ax ? "Latched" : "Bobtail") : "No signal";
+    const fwColor = t.ih ? (t.ax ? "#1B7A1B" : "#CC0000") : "#888";
+    const fwBg    = t.ss ? "#F0F4FF" : t.ih && t.ax ? "#F0FAF0" : t.ih ? "#FFF3F3" : "#F5F5F5";
+    const fwBord  = t.ss ? "#3B5BDB" : t.ih && t.ax ? "#A8D5A8" : t.ih ? "#F0AAAA" : "#E0E0E0";
+
+    return `<div class="fiq-scrd" style="${pk?"opacity:.9;background:#F7F7F7":""}">
+      <div class="fiq-scrd-hdr">
+        <div class="fiq-scrd-l">
+          ${pk ? `<div class="fiq-avatar" style="background:#E8E8E8;border:3px solid #CCC">🌙</div>`
+               : t.ie ? svg(t.us,48)
+               : `<div class="fiq-avatar" style="background:#F0F4FF;border:3px solid #B0C4FF">🚛</div>`}
+          <div>
+            <div style="font-size:18px;font-weight:bold;margin-bottom:5px">${t.unit}</div>
+            <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
+              <span style="background:${st.bg};border:1px solid ${st.border};border-radius:3px;padding:2px 8px;font-size:8px;color:${st.color};font-weight:bold">${st.label.toUpperCase()}</span>
+              ${ib(t)}
+              ${t.ss ? `<span class="fiq-blink" style="font-size:8px;color:#3B5BDB;font-weight:bold">🔧 CHECK SENSOR</span>` : ""}
+            </div>
+          </div>
+        </div>
+        <div style="text-align:right;font-size:8px;color:#888;line-height:1.8"><div>${t.gn}</div><div>VIN: ${t.vin}</div></div>
+      </div>
+      <div class="fiq-sg4">
+        <div>
+          <div class="fiq-colrule"></div><span class="fiq-ch">DISTANCE</span>
+          <div class="fiq-sbox"><span class="fiq-slbl">Shift Miles</span><div class="fiq-sval">${t.sm!==null?t.sm:"—"}<span style="font-size:10px;color:#888"> mi</span></div></div>
+          <div class="fiq-sbox"><span class="fiq-slbl">Speed</span><div class="fiq-sval" style="color:${t.mph>0?"#1B7A1B":"#888"}">${t.mph} mph</div></div>
+        </div>
+        <div>
+          <div class="fiq-colrule"></div><span class="fiq-ch">ENGINE</span>
+          <div class="fiq-sbox"><span class="fiq-slbl">Engine Hours</span><div class="fiq-sval">${t.eh!==null?t.eh:"—"} hr</div></div>
+          <div class="fiq-sbox"><span class="fiq-slbl">Ignition</span><div class="fiq-sval" style="color:${t.ig?"#1B5E20":"#CC0000"}">${t.ig?"ON":"OFF"}</div></div>
+        </div>
+        <div>
+          <div class="fiq-colrule"></div><span class="fiq-ch">FIFTH WHEEL</span>
+          ${t.ie
+            ? `<div class="fiq-sbox" style="background:${fwBg};border-color:${fwBord}">
+                <span class="fiq-slbl">Fifth Wheel</span>
+                <div class="fiq-sval" style="color:${fwColor};font-size:13px">${fwVal}</div>
+                ${t.ss ? `<div style="margin-top:5px;font-size:8px;color:#3B5BDB;font-weight:bold">🔧 CHECK SENSOR — never latched this shift</div>` : ""}
+               </div>`
+            : `<div class="fiq-sbox" style="background:#F0F4FF;border-color:#B0C4FF">
+                <span class="fiq-slbl">IOX-AUX Status</span>
+                <div class="fiq-sval" style="color:#3B5BDB;font-size:13px">Not Equipped</div>
+               </div>`}
+        </div>
+        <div>
+          <div class="fiq-colrule"></div><span class="fiq-ch">FUEL &amp; DEF</span>
+          <div class="fiq-sbox${t.fp!==null&&t.fp<=25?" fiq-sbox-al":""}">
+            <span class="fiq-slbl">Fuel Level</span>
+            <div class="fiq-sval" style="color:${fc}">${t.fp!==null?t.fp+"%":"—"}</div>
+            <div class="fiq-gauge"><div class="fiq-gf" style="width:${t.fp||0}%;background:${fc}"></div></div>
+          </div>
+          <div class="fiq-sbox${t.dp!==null&&t.dp<=25?" fiq-sbox-al":""}">
+            <span class="fiq-slbl">DEF Level</span>
+            ${t.dp!==null
+              ? `<div class="fiq-sval" style="color:${dc}">${t.dp}%</div><div class="fiq-gauge"><div class="fiq-gf" style="width:${t.dp}%;background:${dc}"></div></div>`
+              : `<div style="font-size:10px;color:#888;font-style:italic">Not broadcast</div>`}
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }).join("") || `<div class="fiq-empty">No vehicles found.</div>`;
+  setTimeout(fl, 10);
+}
+
+/* ── UNIT RANK ── */
+function rank() {
+  const ixA = [...fleet].filter(t => t.state!=="parked" && t.ie).sort((a,b) => b.us - a.us);
+  const noI = fleet.filter(t => t.state!=="parked" && !t.ie);
+  const pk  = fleet.filter(t => t.state==="parked");
+  const md  = ["🥇","🥈","🥉"];
+
+  $("fiq-rank-grid").innerHTML = [...ixA, ...noI].map((t,i) => {
+    const st=ST[t.state], fc=lc(t.fp), dc=lc(t.dp), rk=t.ie;
+    return `<div class="fiq-rcrd${i===0&&rk?" fiq-rcrd-top":""}">
+      <div class="fiq-rcrd-hdr">
+        <div>
+          <div style="font-size:10px;font-weight:bold;color:#888;margin-bottom:4px">${rk?`${md[i]||""} RANK #${i+1}`:"GPS ONLY"}</div>
+          <div style="font-size:18px;font-weight:bold">${t.unit}</div>
+          <div style="font-size:8px;color:#888;margin-top:3px">${t.vin}</div>
+        </div>
+        ${rk ? svg(t.us,48) : `<div class="fiq-avatar" style="background:#F0F4FF;border:3px solid #B0C4FF">🚛</div>`}
+      </div>
+      <div class="fiq-rg2">
+        <div class="fiq-sbox2"><span class="fiq-slbl">MOVES</span><div style="font-size:15px;font-weight:bold">${t.mv||"—"}</div></div>
+        <div class="fiq-sbox2"><span class="fiq-slbl">SHIFT MI</span><div style="font-size:15px;font-weight:bold">${t.sm!==null?t.sm:"—"}</div></div>
+        <div class="fiq-sbox2"><span class="fiq-slbl">ENG HRS</span><div style="font-size:15px;font-weight:bold">${t.eh!==null?t.eh:"—"}</div></div>
+        <div class="fiq-sbox2"><span class="fiq-slbl">SPEED</span><div style="font-size:15px;font-weight:bold;color:${t.mph>0?"#1B7A1B":"#888"}">${t.mph} mph</div></div>
+      </div>
+      <div class="fiq-rg2">
+        <div class="fiq-sbox2${t.fp!==null&&t.fp<=25?" fiq-sbox-al":""}">
+          <span class="fiq-slbl">FUEL</span>
+          <div style="font-size:15px;font-weight:bold;color:${fc}">${t.fp!==null?t.fp+"%":"—"}</div>
+          <div class="fiq-gauge"><div class="fiq-gf" style="width:${t.fp||0}%;background:${fc}"></div></div>
+        </div>
+        <div class="fiq-sbox2${t.dp!==null&&t.dp<=25?" fiq-sbox-al":""}">
+          <span class="fiq-slbl">DEF</span>
+          ${t.dp!==null
+            ? `<div style="font-size:15px;font-weight:bold;color:${dc}">${t.dp}%</div><div class="fiq-gauge"><div class="fiq-gf" style="width:${t.dp}%;background:${dc}"></div></div>`
+            : `<div style="font-size:10px;color:#888;font-style:italic">N/A</div>`}
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:7px;background:${st.bg};border:1px solid ${st.border};border-radius:3px;padding:6px 9px">
+        <span class="fiq-dot"><span class="fiq-dotr" style="background:${st.color}"></span><span class="fiq-dotc" style="background:${st.color}"></span></span>
+        <span style="font-size:9px;font-weight:bold;color:${st.color};letter-spacing:.08em">${st.label.toUpperCase()}</span>
+      </div>
+    </div>`;
+  }).join("") || `<div class="fiq-empty">No active units.</div>`;
+
+  $("fiq-rank-pk").innerHTML = pk.map(t =>
+    `<div class="fiq-pkrow">
+      <div style="font-size:22px">🌙</div>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap">
+          <span style="font-size:14px;font-weight:bold">${t.unit}</span>
+          <span style="background:#EEE;border:1px solid #CCC;border-radius:3px;padding:2px 7px;font-size:8px;font-weight:bold;color:#666">ENGINE OFF</span>
+          ${ib(t)}
+        </div>
+        <div style="font-size:8px;color:#888">Miles: <strong>${t.sm!==null?t.sm+" mi":"—"}</strong> · Eng: <strong>${t.eh!==null?t.eh+"hr":"—"}</strong></div>
+      </div>
+      <div class="fiq-pkfuel">
+        <div class="fiq-pkfc"><div style="font-size:7px;color:#888;margin-bottom:2px">FUEL</div><div style="font-size:14px;font-weight:bold;color:${lc(t.fp)}">${t.fp!==null?t.fp+"%":"—"}</div></div>
+        <div class="fiq-pkfc"><div style="font-size:7px;color:#888;margin-bottom:2px">DEF</div><div style="font-size:14px;font-weight:bold;color:${lc(t.dp)}">${t.dp!==null?t.dp+"%":"N/A"}</div></div>
+      </div>
+    </div>`
+  ).join("");
+  setTimeout(fl, 10);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   UI HELPERS
+══════════════════════════════════════════════════════════════ */
+function showTab(id, btn) {
+  ["live","stats","rank"].forEach(p => {
+    const e = $("fiq-p-"+p); if(e) e.style.display = p===id ? "block" : "none";
+  });
+  document.querySelectorAll(".fiq-tab").forEach(b => b.classList.remove("fiq-tab-on"));
+  if (btn) btn.classList.add("fiq-tab-on");
+  setTimeout(fl, 10);
+}
+
+function xp(i) {
+  const e = $("fiq-e"+i); if (!e) return;
+  if (e.classList.toggle("fiq-exp-open")) {
+    e.style.display="grid"; e.style.gridTemplateColumns="repeat(4,1fr)";
+    e.style.gap="7px"; e.style.marginTop="9px"; e.style.paddingTop="9px"; e.style.borderTop="1px solid #EBEBEB";
+  } else {
+    e.style.display="none";
+  }
+}
+
+function setStyle(el, css) { if(el) el.setAttribute('style', css); }
+
+function showScreen(n) {
+  const app=$("fiq-app"), ld=$("fiq-loading"), er=$("fiq-error");
+  setStyle(ld, n==="loading"
+    ? "display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#1F1F1F;gap:20px"
+    : "display:none");
+  setStyle(er, n==="error"
+    ? "display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:80vh;background:#1F1F1F;gap:16px;padding:40px;text-align:center"
+    : "display:none");
+  setStyle(app, n==="app"
+    ? "display:flex;flex-direction:column;min-height:100vh"
+    : "display:none");
+  if (n==="app") {
+    clearInterval(layoutTimer); let count=0;
+    layoutTimer = setInterval(() => { fl(); count++; if(count>=15) clearInterval(layoutTimer); }, 200);
+  }
+}
+
+function showError(msg) {
+  console.error("SpotterIQ ERROR:", msg);
+  const e = $("fiq-err"); if(e) e.textContent = msg || "Unknown error";
+  showScreen("error");
+}
+</script>
 </body>
 </html>
