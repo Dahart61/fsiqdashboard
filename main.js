@@ -95,10 +95,23 @@
         el.addEventListener('mouseenter', function (e) {
             var rect = el.getBoundingClientRect();
             tooltipEl.textContent = text;
-            tooltipEl.style.left = (rect.left + rect.width / 2) + 'px';
-            tooltipEl.style.top = (rect.top - 6) + 'px';
-            tooltipEl.style.transform = 'translate(-50%, -100%)';
             tooltipEl.classList.add('tooltip--visible');
+
+            // Measure tooltip after content is set
+            var tipRect = tooltipEl.getBoundingClientRect();
+            var tipW = tipRect.width;
+
+            // Center above element, then clamp to viewport
+            var left = rect.left + rect.width / 2 - tipW / 2;
+            var top = rect.top - 6;
+
+            // Clamp horizontal: 8px padding from edges
+            if (left < 8) left = 8;
+            if (left + tipW > window.innerWidth - 8) left = window.innerWidth - 8 - tipW;
+
+            tooltipEl.style.left = left + 'px';
+            tooltipEl.style.top = top + 'px';
+            tooltipEl.style.transform = 'translateY(-100%)';
         });
         el.addEventListener('mouseleave', function () {
             tooltipEl.classList.remove('tooltip--visible');
@@ -121,6 +134,9 @@
     }
     function gphColor(v) {
         return v < 2.0 ? '#16a34a' : v <= 3.0 ? '#ca8a04' : '#dc2626';
+    }
+    function gphBg(v) {
+        return v < 2.0 ? 'rgba(22,163,74,0.07)' : v <= 3.0 ? 'rgba(202,138,4,0.07)' : 'rgba(220,38,38,0.07)';
     }
     function gphTag(v) {
         return v < 2.0 ? 'EFFICIENT' : v <= 3.0 ? 'MONITOR' : 'OVER LIMIT';
@@ -578,7 +594,7 @@
         // KPIs
         var kpis = document.getElementById('drillKpis');
         var kpiData = [
-            { l: 'GPH', v: data.avgGph, c: gphColor(data.avgGph), bg: gphColor(data.avgGph).replace(')', ',0.07)').replace('rgb', 'rgba') },
+            { l: 'GPH', v: data.avgGph, c: gphColor(data.avgGph), bg: gphBg(data.avgGph) },
             { l: 'Waste Fuel', v: data.waste !== null ? data.waste + ' gal' : '—', c: data.waste !== null ? '#dc2626' : '#bbb', bg: 'rgba(220,38,38,0.05)' },
             { l: 'Eng Hrs', v: data.tEH + ' h', c: '#0c4a6e', bg: 'rgba(12,74,110,0.05)' },
             { l: 'Fuel', v: data.tF + ' gal', c: '#111827', bg: '#f9fafb' },
