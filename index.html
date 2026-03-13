@@ -84,34 +84,15 @@
 
     <!-- FILTER BAR -->
     <div id="fiq-filter">
-      <label class="fiq-filterlbl">SHIFT START</label>
-      <select id="fiq-shiftsel">
-        <option value="rolling12">Rolling 12 Hours</option>
-        <option value="0">12:00 AM</option>
-        <option value="1">1:00 AM</option>
-        <option value="2">2:00 AM</option>
-        <option value="3">3:00 AM</option>
-        <option value="4">4:00 AM</option>
-        <option value="5" selected>5:00 AM</option>
-        <option value="6">6:00 AM</option>
-        <option value="7">7:00 AM</option>
-        <option value="8">8:00 AM</option>
-        <option value="9">9:00 AM</option>
-        <option value="10">10:00 AM</option>
-        <option value="11">11:00 AM</option>
-        <option value="12">12:00 PM</option>
-        <option value="13">1:00 PM</option>
-        <option value="14">2:00 PM</option>
-        <option value="15">3:00 PM</option>
-        <option value="16">4:00 PM</option>
-        <option value="17">5:00 PM</option>
-        <option value="18">6:00 PM</option>
-        <option value="19">7:00 PM</option>
-        <option value="20">8:00 PM</option>
-        <option value="21">9:00 PM</option>
-        <option value="22">10:00 PM</option>
-        <option value="23">11:00 PM</option>
-      </select>
+      <label class="fiq-filterlbl">ACTIVE SHIFT</label>
+      <div id="fiq-shiftdisp" style="display:flex;align-items:center;gap:8px">
+        <span id="fiq-shiftname" style="font-size:12px;font-weight:bold;color:#1A1A1A;background:#fff;border:1px solid #CCC;border-radius:4px;padding:4px 12px;height:28px;display:flex;align-items:center;min-width:160px">Rolling 12 Hours</span>
+        <!-- Admin override: shown only to admins after shifts are defined -->
+        <select id="fiq-shiftsel" style="display:none;padding:5px 10px;border:1px solid #CCC;border-radius:4px;font-size:12px;background:#fff;color:#1A1A1A;height:28px">
+          <option value="rolling12">Rolling 12 Hours</option>
+        </select>
+        <button id="fiq-shiftoverride" style="display:none;font-size:10px;padding:3px 8px;border:1px solid #B87800;border-radius:3px;background:#FFFBF0;color:#B87800;cursor:pointer;font-weight:bold">OVERRIDE</button>
+      </div>
       <button id="fiq-refbtn">↻ REFRESH</button>
       <span id="fiq-upd">Not yet refreshed</span>
     </div>
@@ -131,6 +112,7 @@
       <button id="fiq-tab-live"  class="fiq-tab">⬤ LIVE FLOOR</button>
       <button id="fiq-tab-stats" class="fiq-tab">◈ UNIT STATS</button>
       <button id="fiq-tab-rank"  class="fiq-tab">↑↓ UNIT RANK</button>
+      <button id="fiq-tab-shifts" class="fiq-tab" style="display:none">⚙ SHIFTS</button>
     </div>
 
     <!-- TAB CONTENT -->
@@ -161,11 +143,16 @@
       <!-- UNIT RANK -->
       <div id="fiq-p-rank" style="display:none"><div id="fiq-rank-grid"></div><div id="fiq-rank-pk"></div></div>
 
+      <!-- SHIFTS (admin only) -->
+      <div id="fiq-p-shifts" style="display:none">
+        <div id="fiq-shifts-wrap"></div>
+      </div>
+
     </div><!-- /fiq-content -->
 
     <div id="fiq-footer">
       <span>FleetSource Leasing · 2382 Route 130, Dayton, NJ 08810</span>
-      <div><span style="font-size:9px;font-weight:bold;color:#888;letter-spacing:.14em">FLEETSOURCE</span><span style="font-size:11px;font-weight:bold;color:#CC0000;letter-spacing:.1em"> IQ</span><span style="color:#888;margin-left:3px">· Spotter IQ · GO9 · IOX-AUX optional · ProPlus · v1.6.0</span></div>
+      <div><span style="font-size:9px;font-weight:bold;color:#888;letter-spacing:.14em">FLEETSOURCE</span><span style="font-size:11px;font-weight:bold;color:#CC0000;letter-spacing:.1em"> IQ</span><span style="color:#888;margin-left:3px">· Spotter IQ · GO9 · IOX-AUX optional · ProPlus · v1.7.0</span></div>
     </div>
 
   </div><!-- /fiq-app -->
@@ -242,6 +229,42 @@ function injectVisualCSS() {
     .fiq-sval    { font-size:16px;font-weight:bold;line-height:1; }
     .fiq-ch      { font-size:8px;font-weight:bold;color:#CC0000;letter-spacing:.1em;text-transform:uppercase;margin-bottom:7px; }
     .fiq-colrule { height:2px;background:#CC0000;margin-bottom:6px; }
+    /* ── SHIFT MANAGEMENT ── */
+    #fiq-shifts-wrap        { padding:20px;max-width:860px;margin:0 auto; }
+    .fiq-shift-hdr          { display:flex;align-items:center;justify-content:space-between;margin-bottom:16px; }
+    .fiq-shift-title        { font-size:13px;font-weight:bold;color:#1A1A1A;letter-spacing:.06em;text-transform:uppercase; }
+    .fiq-shift-addbtn       { background:#004a99;color:#fff;border:none;border-radius:4px;padding:7px 16px;font-size:11px;font-weight:bold;cursor:pointer;letter-spacing:.06em; }
+    .fiq-shift-addbtn:hover { background:#003a79; }
+    .fiq-shiftcard          { background:#fff;border:1px solid #DDD;border-radius:6px;padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap; }
+    .fiq-shiftcard-active   { border-color:#1B7A1B;background:#F0FAF0; }
+    .fiq-sc-name            { font-size:13px;font-weight:bold;color:#1A1A1A;min-width:120px; }
+    .fiq-sc-time            { font-size:11px;color:#555;background:#F4F4F4;border-radius:3px;padding:3px 8px;font-family:monospace; }
+    .fiq-sc-days            { display:flex;gap:4px; }
+    .fiq-sc-day             { font-size:9px;font-weight:bold;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center; }
+    .fiq-sc-day-on          { background:#004a99;color:#fff; }
+    .fiq-sc-day-off         { background:#EEE;color:#AAA; }
+    .fiq-sc-badge           { font-size:8px;font-weight:bold;letter-spacing:.08em;background:#1B7A1B;color:#fff;border-radius:2px;padding:2px 6px; }
+    .fiq-sc-btns            { margin-left:auto;display:flex;gap:7px; }
+    .fiq-sc-edit            { font-size:10px;padding:4px 10px;border:1px solid #CCC;border-radius:3px;background:#fff;cursor:pointer;font-weight:bold;color:#555; }
+    .fiq-sc-edit:hover      { background:#F4F4F4; }
+    .fiq-sc-del             { font-size:10px;padding:4px 10px;border:1px solid #CC0000;border-radius:3px;background:#fff;cursor:pointer;font-weight:bold;color:#CC0000; }
+    .fiq-sc-del:hover       { background:#FFF3F3; }
+    #fiq-shift-modal        { display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center; }
+    #fiq-shift-modal.open   { display:flex; }
+    #fiq-shift-form         { background:#fff;border-radius:8px;padding:28px 32px;width:420px;max-width:95vw;box-shadow:0 8px 32px rgba(0,0,0,.22); }
+    .fiq-fm-title           { font-size:13px;font-weight:bold;letter-spacing:.06em;text-transform:uppercase;color:#1A1A1A;margin-bottom:20px; }
+    .fiq-fm-row             { margin-bottom:14px; }
+    .fiq-fm-lbl             { font-size:9px;font-weight:bold;letter-spacing:.08em;color:#888;text-transform:uppercase;margin-bottom:5px; }
+    .fiq-fm-inp             { width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid #CCC;border-radius:4px;font-size:12px;font-family:inherit; }
+    .fiq-fm-inp:focus       { outline:none;border-color:#004a99; }
+    .fiq-fm-days            { display:flex;gap:6px;flex-wrap:wrap; }
+    .fiq-fm-day             { display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer; }
+    .fiq-fm-foot            { display:flex;gap:10px;justify-content:flex-end;margin-top:22px; }
+    .fiq-fm-cancel          { padding:8px 18px;border:1px solid #CCC;border-radius:4px;background:#fff;font-size:11px;font-weight:bold;cursor:pointer;color:#555; }
+    .fiq-fm-save            { padding:8px 18px;border:none;border-radius:4px;background:#004a99;color:#fff;font-size:11px;font-weight:bold;cursor:pointer; }
+    .fiq-fm-save:hover      { background:#003a79; }
+    .fiq-shifts-empty       { text-align:center;padding:40px 20px;color:#888;font-size:12px;font-style:italic; }
+    /* ── UNIT RANK ── */
     .fiq-rcrd    { background:#fff;border:1px solid #CCC;border-radius:4px;padding:14px; }
     .fiq-rcrd-top{ border-color:#CC0000;border-top:3px solid #CC0000;box-shadow:0 2px 10px rgba(204,0,0,.1); }
     .fiq-sbox2   { background:#F5F5F5;border:1px solid #E0E0E0;border-radius:3px;padding:8px 10px; }
@@ -313,6 +336,7 @@ injectVisualCSS();
 
 let gApi = null, gState = null, refreshTimer = null, layoutTimer = null;
 let fleet = [], userGids = [], isAdmin = false;
+let shifts = [], activeShift = null; // customer-defined shift schedule
 
 // Geotab Diagnostic IDs
 const DIAG = {
@@ -388,9 +412,17 @@ if (typeof geotab !== "undefined") {
         $("fiq-shiftsel").addEventListener("change", () => refreshData());
         $("fiq-refbtn") .addEventListener("click",   () => refreshData());
         $("fiq-retry")  .addEventListener("click",   () => initAddin());
-        $("fiq-tab-live") .addEventListener("click", function(){ showTab("live",  this); });
-        $("fiq-tab-stats").addEventListener("click", function(){ showTab("stats", this); });
-        $("fiq-tab-rank") .addEventListener("click", function(){ showTab("rank",  this); });
+        $("fiq-tab-live")  .addEventListener("click", function(){ showTab("live",   this); });
+        $("fiq-tab-stats") .addEventListener("click", function(){ showTab("stats",  this); });
+        $("fiq-tab-rank")  .addEventListener("click", function(){ showTab("rank",   this); });
+        $("fiq-tab-shifts").addEventListener("click", function(){ showTab("shifts", this); renderShifts(); });
+        $("fiq-shiftoverride").addEventListener("click", () => {
+          const sel = $("fiq-shiftsel");
+          if (sel) sel.style.display = sel.style.display === "none" ? "inline-block" : "none";
+        });
+        $("fiq-fm-cancel").addEventListener("click", closeShiftModal);
+        $("fiq-fm-save")  .addEventListener("click", saveShiftForm);
+        $("fiq-shift-modal").addEventListener("click", e => { if (e.target === $("fiq-shift-modal")) closeShiftModal(); });
         const tl = $("fiq-tab-live"); if (tl) tl.classList.add("fiq-tab-on");
         startClock();
 
@@ -421,9 +453,17 @@ if (typeof geotab !== "undefined") {
     $("fiq-shiftsel").addEventListener("change", () => refreshData());
     $("fiq-refbtn") .addEventListener("click",   () => refreshData());
     $("fiq-retry")  .addEventListener("click",   () => initAddin());
-    $("fiq-tab-live") .addEventListener("click", function(){ showTab("live",  this); });
-    $("fiq-tab-stats").addEventListener("click", function(){ showTab("stats", this); });
-    $("fiq-tab-rank") .addEventListener("click", function(){ showTab("rank",  this); });
+    $("fiq-tab-live")  .addEventListener("click", function(){ showTab("live",   this); });
+    $("fiq-tab-stats") .addEventListener("click", function(){ showTab("stats",  this); });
+    $("fiq-tab-rank")  .addEventListener("click", function(){ showTab("rank",   this); });
+    $("fiq-tab-shifts").addEventListener("click", function(){ showTab("shifts", this); renderShifts(); });
+    $("fiq-shiftoverride").addEventListener("click", () => {
+      const sel = $("fiq-shiftsel");
+      if (sel) sel.style.display = sel.style.display === "none" ? "inline-block" : "none";
+    });
+    $("fiq-fm-cancel").addEventListener("click", closeShiftModal);
+    $("fiq-fm-save")  .addEventListener("click", saveShiftForm);
+    $("fiq-shift-modal").addEventListener("click", e => { if (e.target === $("fiq-shift-modal")) closeShiftModal(); });
     const tl = $("fiq-tab-live"); if (tl) tl.classList.add("fiq-tab-on");
     startClock();
     setTimeout(loadDemo, 800);
@@ -482,15 +522,195 @@ async function loadGroups() {
   }
 }
 
-/* Compute shift window start from the dropdown selection */
+
+/* ══════════════════════════════════════════════════════════════
+   SHIFT MANAGEMENT
+══════════════════════════════════════════════════════════════ */
+
+/* Detect which shift is currently active based on day+time */
+function detectActiveShift() {
+  if (!shifts.length) return null;
+  const now  = new Date();
+  const dow  = now.getDay();
+  const hhmm = now.getHours() * 60 + now.getMinutes();
+  return shifts.find(s => {
+    if (!s.days.includes(dow)) return false;
+    const [sh, sm] = s.start.split(':').map(Number);
+    const [eh, em] = s.end.split(':').map(Number);
+    const start = sh * 60 + sm, end = eh * 60 + em;
+    return end < start          // overnight shift
+      ? hhmm >= start || hhmm < end
+      : hhmm >= start && hhmm < end;
+  }) || null;
+}
+
+/* Update shift name display and populate admin override dropdown */
+function syncShiftUI() {
+  activeShift = detectActiveShift();
+  const nameEl = $("fiq-shiftname");
+  const sel    = $("fiq-shiftsel");
+  const ovr    = $("fiq-shiftoverride");
+
+  if (activeShift) {
+    if (nameEl) nameEl.textContent = activeShift.name;
+  } else {
+    if (nameEl) nameEl.textContent = "Rolling 12 Hours";
+  }
+
+  // Admins get override dropdown when shifts are defined
+  if (isAdmin && shifts.length) {
+    // Rebuild options: detected shift first, then all defined shifts, then rolling
+    if (sel) {
+      sel.innerHTML = '';
+      const opts = [
+        { value: 'auto', label: activeShift ? '⬤ ' + activeShift.name + ' (Auto)' : 'Rolling 12 Hours' },
+        ...shifts.map(s => ({ value: s.id, label: s.name + ' (' + s.start + '–' + s.end + ')' })),
+        { value: 'rolling12', label: 'Rolling 12 Hours' }
+      ];
+      opts.forEach(o => {
+        const el = document.createElement('option');
+        el.value = o.value; el.textContent = o.label;
+        sel.appendChild(el);
+      });
+      sel.value = 'auto';
+    }
+    if (ovr) ovr.style.display = 'inline-block';
+  } else {
+    if (ovr) ovr.style.display = 'none';
+  }
+}
+
+/* Compute shift window start from active shift or override selection */
 function shiftFrom() {
-  const v = $("fiq-shiftsel")?.value || "rolling12";
-  const d = new Date();
-  if (v === "rolling12") { d.setHours(d.getHours() - 12); return d; }
-  const h = parseInt(v, 10);
-  d.setHours(h, 0, 0, 0);
-  if (d > new Date()) d.setDate(d.getDate() - 1);
-  return d;
+  const sel = $("fiq-shiftsel");
+  const ov  = sel?.value;
+
+  // If admin has selected a specific override shift by ID
+  if (ov && ov !== 'auto' && ov !== 'rolling12') {
+    const s = shifts.find(sh => String(sh.id) === String(ov));
+    if (s) {
+      const [h, m] = s.start.split(':').map(Number);
+      const d = new Date(); d.setHours(h, m, 0, 0);
+      if (d > new Date()) d.setDate(d.getDate() - 1);
+      return d;
+    }
+  }
+
+  // Auto: use detected active shift
+  if (activeShift && (ov === 'auto' || !ov)) {
+    const [h, m] = activeShift.start.split(':').map(Number);
+    const d = new Date(); d.setHours(h, m, 0, 0);
+    if (d > new Date()) d.setDate(d.getDate() - 1);
+    return d;
+  }
+
+  // Fallback: rolling 12 hours
+  const d = new Date(); d.setHours(d.getHours() - 12); return d;
+}
+
+/* Load shifts from Geotab SystemSettings.customerPages */
+async function loadShifts() {
+  try {
+    const ss = await gapi("Get", { typeName: "SystemSettings" });
+    const raw = ss?.[0]?.customerPages;
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      shifts = parsed?.fiqShifts || [];
+    }
+  } catch(_) { shifts = []; }
+  syncShiftUI();
+}
+
+/* Persist shifts to Geotab SystemSettings.customerPages */
+async function saveShifts() {
+  try {
+    // Get current customerPages to avoid clobbering other add-in data
+    const ss  = await gapi("Get", { typeName: "SystemSettings" });
+    let existing = {};
+    try { existing = JSON.parse(ss?.[0]?.customerPages || '{}'); } catch(_) {}
+    existing.fiqShifts = shifts;
+    await gapi("Set", { typeName: "SystemSettings", entity: { customerPages: JSON.stringify(existing) } });
+  } catch(e) { console.error("SpotterIQ: failed to save shifts", e); }
+}
+
+/* Render the SHIFTS tab panel */
+function renderShifts() {
+  const w = $("fiq-shifts-wrap"); if (!w) return;
+  const DAYS = ['S','M','T','W','T','F','S'];
+  const DAYFULL = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+  w.innerHTML = `
+    <div class="fiq-shift-hdr">
+      <div class="fiq-shift-title">⚙ Shift Schedule</div>
+      <button class="fiq-shift-addbtn" id="fiq-shift-add">+ ADD SHIFT</button>
+    </div>
+    ${!shifts.length
+      ? '<div class="fiq-shifts-empty">No shifts defined yet.<br>Add a shift to enable automatic shift detection.</div>'
+      : shifts.map(s => {
+          const isActive = activeShift && activeShift.id === s.id;
+          return `<div class="fiq-shiftcard${isActive ? ' fiq-shiftcard-active' : ''}">
+            <div class="fiq-sc-name">${s.name}</div>
+            <div class="fiq-sc-time">${s.start} – ${s.end}</div>
+            <div class="fiq-sc-days">${DAYS.map((d,i) =>
+              `<div class="fiq-sc-day ${s.days.includes(i)?'fiq-sc-day-on':'fiq-sc-day-off'}" title="${DAYFULL[i]}">${d}</div>`
+            ).join('')}</div>
+            ${isActive ? '<span class="fiq-sc-badge">ACTIVE NOW</span>' : ''}
+            <div class="fiq-sc-btns">
+              <button class="fiq-sc-edit" onclick="openShiftModal(${s.id})">Edit</button>
+              <button class="fiq-sc-del"  onclick="deleteShift(${s.id})">Delete</button>
+            </div>
+          </div>`;
+        }).join('')
+    }`;
+
+  $("fiq-shift-add").addEventListener('click', () => openShiftModal(null));
+}
+
+/* Open add/edit modal. id=null for new shift */
+let _editId = null;
+function openShiftModal(id) {
+  _editId = id;
+  const s = id !== null ? shifts.find(sh => sh.id === id) : null;
+  T("fiq-fm-title", s ? "Edit Shift" : "Add Shift");
+  $("fiq-fm-name").value  = s ? s.name  : '';
+  $("fiq-fm-start").value = s ? s.start : '05:00';
+  $("fiq-fm-end").value   = s ? s.end   : '15:00';
+  [0,1,2,3,4,5,6].forEach(i => {
+    const cb = $("fiq-fd-" + i); if (cb) cb.checked = s ? s.days.includes(i) : (i >= 1 && i <= 5);
+  });
+  $("fiq-shift-modal").classList.add('open');
+  setTimeout(() => $("fiq-fm-name").focus(), 50);
+}
+
+function closeShiftModal() { $("fiq-shift-modal").classList.remove('open'); }
+
+async function saveShiftForm() {
+  const name  = $("fiq-fm-name").value.trim();
+  const start = $("fiq-fm-start").value;
+  const end   = $("fiq-fm-end").value;
+  const days  = [0,1,2,3,4,5,6].filter(i => $("fiq-fd-" + i)?.checked);
+  if (!name)       { alert("Please enter a shift name."); return; }
+  if (!start||!end){ alert("Please set start and end times."); return; }
+  if (!days.length){ alert("Please select at least one day."); return; }
+
+  if (_editId !== null) {
+    const idx = shifts.findIndex(s => s.id === _editId);
+    if (idx >= 0) shifts[idx] = { id: _editId, name, start, end, days };
+  } else {
+    shifts.push({ id: Date.now(), name, start, end, days });
+  }
+  closeShiftModal();
+  await saveShifts();
+  syncShiftUI();
+  renderShifts();
+}
+
+async function deleteShift(id) {
+  if (!confirm("Delete this shift?")) return;
+  shifts = shifts.filter(s => s.id !== id);
+  await saveShifts();
+  syncShiftUI();
+  renderShifts();
 }
 
 async function refreshData() {
@@ -1233,7 +1453,7 @@ function rank() {
    UI HELPERS
 ══════════════════════════════════════════════════════════════ */
 function showTab(id, btn) {
-  ["live","stats","rank"].forEach(p => {
+  ["live","stats","rank","shifts"].forEach(p => {
     const e = $("fiq-p-"+p); if(e) e.style.display = p===id ? "block" : "none";
   });
   document.querySelectorAll(".fiq-tab").forEach(b => b.classList.remove("fiq-tab-on"));
@@ -1276,5 +1496,42 @@ function showError(msg) {
   showScreen("error");
 }
 </script>
+
+  <!-- SHIFT EDITOR MODAL -->
+  <div id="fiq-shift-modal">
+    <div id="fiq-shift-form">
+      <div class="fiq-fm-title" id="fiq-fm-title">Add Shift</div>
+      <div class="fiq-fm-row">
+        <div class="fiq-fm-lbl">Shift Name</div>
+        <input class="fiq-fm-inp" id="fiq-fm-name" type="text" placeholder="e.g. Day Shift" maxlength="40">
+      </div>
+      <div class="fiq-fm-row" style="display:flex;gap:14px">
+        <div style="flex:1">
+          <div class="fiq-fm-lbl">Start Time</div>
+          <input class="fiq-fm-inp" id="fiq-fm-start" type="time">
+        </div>
+        <div style="flex:1">
+          <div class="fiq-fm-lbl">End Time</div>
+          <input class="fiq-fm-inp" id="fiq-fm-end" type="time">
+        </div>
+      </div>
+      <div class="fiq-fm-row">
+        <div class="fiq-fm-lbl">Days Active</div>
+        <div class="fiq-fm-days">
+          <label class="fiq-fm-day"><input type="checkbox" value="0" id="fiq-fd-0"> Sun</label>
+          <label class="fiq-fm-day"><input type="checkbox" value="1" id="fiq-fd-1"> Mon</label>
+          <label class="fiq-fm-day"><input type="checkbox" value="2" id="fiq-fd-2"> Tue</label>
+          <label class="fiq-fm-day"><input type="checkbox" value="3" id="fiq-fd-3"> Wed</label>
+          <label class="fiq-fm-day"><input type="checkbox" value="4" id="fiq-fd-4"> Thu</label>
+          <label class="fiq-fm-day"><input type="checkbox" value="5" id="fiq-fd-5"> Fri</label>
+          <label class="fiq-fm-day"><input type="checkbox" value="6" id="fiq-fd-6"> Sat</label>
+        </div>
+      </div>
+      <div class="fiq-fm-foot">
+        <button class="fiq-fm-cancel" id="fiq-fm-cancel">Cancel</button>
+        <button class="fiq-fm-save"   id="fiq-fm-save">Save Shift</button>
+      </div>
+    </div>
+  </div>
 </body>
 </html>
